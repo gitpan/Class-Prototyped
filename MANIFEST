@@ -3,9 +3,8 @@ Class/Prototyped.pm
 Class/Prototyped/Graph.pm
 Class/Prototyped/why.pod
 MANIFEST
-MANIFEST.SKIP
 Makefile.PL
-Prototyped.html
+README
 examples/graph.png
 examples/graphtest.pl
 t/classReflect.t

@@ -1,3 +1,25 @@
+Revision history for Perl extension Class::Prototyped
+
+0.90  Wed Dec 18 2002
+ - Moved addition of DESTROY symbol table entry in newPackage into
+   code guarded by check for PREFIXED package name
+ - Created $parent_DESTROY search code that looks for DESTROYs that
+   aren't clones of C::P::DESTROY
+ - Modified destroy and DESTROY so that parent slots aren't deleted
+   until the destruction sequence on an object is complete
+ - Updated destroy.t to include parent** slots, more explicit scope
+   ordering (which fixed test variations related to changes in the
+   order in which lexicals exit scope), as well as use of field slots
+ - Added more tests to super.t
+ - Code passes all tests under:
+   ActivePerl 804 (based on v5.8.0)
+   ActivePerl 633 (based on v5.6.1)
+   ActivePerl 517 (based on v5.005_03)
+ - Incremented version number to 0.90 to reflect code maturity level
+
+
+0.11 (released 7/14/01) and prior:
+
 RCS file: /usr/local/cvsroot/perl/Class/Prototyped/Class/Prototyped.pm,v
 Working file: Class/Prototyped.pm
 head: 1.36

@@ -4,8 +4,8 @@ use Class::Prototyped qw(:REFLECT);
 use Test;
 
 BEGIN {
-	$|++;
-	plan tests => 11;
+  $|++;
+  plan tests => 11;
 }
 
 package A;

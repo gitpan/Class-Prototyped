@@ -4,7 +4,7 @@ use Class::Prototyped qw(:NEW_MAIN);
 use Test;
 
 BEGIN {
-	$|++;
+  $|++;
   plan tests => 30;
 }
 
