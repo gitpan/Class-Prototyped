@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Prototyped
 
+1.00  Sat Mar 20 2004
+ - Now using Module::Build!
+ - Now generating PPMs as well!
+ - Long live Module::Build!
+
 0.98  Mon Jan 19 2004
  - Distribution updated to migrate Class directory into lib and update
    Manifest and Makefile.pl.

@@ -4,13 +4,13 @@
 #
 # Author: Ned Konz and Toby Ovod-Everett
 #############################################################################
-# Copyright 2001-2003 Ned Konz and Toby Ovod-Everett.  All rights reserved.
+# Copyright 2001-2004 Ned Konz and Toby Ovod-Everett.  All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the same terms as Perl itself.
 #
 # For comments, questions, bugs or general interest, feel free to
-# contact Toby Ovod-Everett at tovod-everett@alascom.att.com
+# contact Toby Ovod-Everett at toby@ovod-everett.org
 #############################################################################
 
 # Class::Prototyped - Fast prototype-based OO programming in Perl
@@ -24,7 +24,7 @@ package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '0.98';
+$Class::Prototyped::VERSION = '1.00';
 
 sub import {
 	while (my $symbol = shift) {
@@ -1623,6 +1623,24 @@ The structure of an object is inspected and modified through I<mirrors>, which
 are created by calling C<reflect> on an object or class that inherits from
 C<Class::Prototyped>.
 
+=head2 Installation instructions
+
+This module requires C<Module::Build 0.24> to use the automated installation 
+procedures.  With C<Module::Build> installed:
+
+  Build.PL
+  perl build test
+  perl build install
+
+It can be installed under ActivePerl for Win32 by downloading the PPM from CPAN 
+(the file has the extension C<.ppm.zip>).  To install, download the C<.ppm.zip> 
+file, uncompress it, and execute:
+
+  ppm install Class-Prototyped.ppd
+
+The module can also be installed manually by copying C<lib/Class/Prototyped.pm> 
+to C<perl/site/lib/Class/Prototyped.pm> (along with C<Graph.pm> if you want it).
+
 
 =head1 WHEN TO USE THIS MODULE
 
@@ -2769,15 +2787,14 @@ C<thisObject()>.
 
 =head1 AUTHOR
 
-Written by Ned Konz, perl@bike-nomad.com
-and Toby Ovod-Everett, tovod-everett@alascom.att.com or toby@ovod-everett.org.
-5.005_03 porting by chromatic.
+Written by Ned Konz, perl@bike-nomad.com and Toby Ovod-Everett, 
+toby@ovod-everett.org. 5.005_03 porting by chromatic.
 
 Toby Ovod-Everett is currently maintaining the package.
 
 =head1 LICENSE
 
-Copyright 2001-2003 Ned Konz and Toby Ovod-Everett.  All rights reserved. This 
+Copyright 2001-2004 Ned Konz and Toby Ovod-Everett.  All rights reserved. This 
 program is free software; you can redistribute it and/or modify it under the 
 same terms as Perl itself.
 
