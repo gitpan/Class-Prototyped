@@ -24,7 +24,7 @@ package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '0.97';
+$Class::Prototyped::VERSION = '0.98';
 
 sub import {
 	while (my $symbol = shift) {

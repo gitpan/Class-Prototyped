@@ -6,8 +6,8 @@ use Test;
 use IO::File;
 
 BEGIN {
-  $|++;
-  plan tests => 18;
+	$|++;
+	plan tests => 18;
 }
 
 $Data::Dumper::Sortkeys = 1;
@@ -15,7 +15,7 @@ $Data::Dumper::Sortkeys = 1;
 
 my $fileName = 't/xxxtest.pl';
 my $file = IO::File->new( ">$fileName" )
-  or die "Can't open $fileName: $!\n";
+	or die "Can't open $fileName: $!\n";
 $file->print($_) while <DATA>;
 close($file);
 
@@ -59,9 +59,9 @@ sub b { 'xxx.b' }
 sub c { return thisObject(); }
 
 thisObject()->reflect->addSlots(
-  'parent*' => 'A',
-  d => 'added.d',
-  e => sub { 'xxx.e' },
+	'parent*' => 'A',
+	d => 'added.d',
+	e => sub { 'xxx.e' },
 );
 
 1;

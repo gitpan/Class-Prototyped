@@ -1,5 +1,9 @@
 Revision history for Perl extension Class::Prototyped
 
+0.98  Mon Jan 19 2004
+ - Distribution updated to migrate Class directory into lib and update
+   Manifest and Makefile.pl.
+
 0.97  Mon Sep 22 2003
  - Slot attribute 'profile' modified to support recording
    calling location.

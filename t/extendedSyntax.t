@@ -5,8 +5,8 @@ use Data::Dumper;
 use Test;
 
 BEGIN {
-  $|++;
-  plan tests => 43;
+	$|++;
+	plan tests => 43;
 }
 
 $Data::Dumper::Sortkeys = 1;
