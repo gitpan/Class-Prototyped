@@ -1,8 +1,0 @@
-<SOFTPKG NAME="Class-Prototyped" VERSION="1,01,0,0">
-    <TITLE>Class-Prototyped</TITLE>
-    <ABSTRACT>Fast prototype-based OO programming in Perl</ABSTRACT>
-    <AUTHOR>Written by Ned Konz, perl@bike-nomad.com and Toby Ovod-Everett, \ntoby@ovod-everett.org. 5.005_03 porting by chromatic.</AUTHOR>
-    <IMPLEMENTATION>
-        <CODEBASE HREF="MSWin32-x86-multi-thread/Class-Prototyped-1.01.tar.gz" />
-    </IMPLEMENTATION>
-</SOFTPKG>
