@@ -1,5 +1,9 @@
 Revision history for Perl extension Class::Prototyped
 
+0.97  Mon Sep 22 2003
+ - Slot attribute 'profile' modified to support recording
+   calling location.
+
 0.96  Tue Sep 16 2003
  - More POD changes and updates
 

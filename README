@@ -862,9 +862,13 @@ specific package.
             objects!
 
         "profile" ("filter", rank 80)
-            Increments
-            "$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slot
-            Name}" everytime the slot is accessed.
+            If "profile" is set to 1, increments "
+            $Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotN
+            ame}" everytime the slot is accessed. If "profile" is set to 2,
+            increments "
+            $Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotN
+            ame}->{$caller}" everytime the slot is accessed, where "$caller"
+            is ""$file ($line)"".
 
         "wantarray" ("filter", rank 90)
             If the field specifies a reference to an array and the call is

@@ -24,7 +24,7 @@ package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '0.96';
+$Class::Prototyped::VERSION = '0.97';
 
 sub import {
 	while (my $symbol = shift) {
@@ -766,13 +766,21 @@ $Class::Prototyped::Mirror::attributes = {
 			code => sub {
 				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
 
-				if ($slotAttribs->{profile}) {
+				my $profileLevel = $slotAttribs->{profile};
+				if ($profileLevel) {
 					package Class::Prototyped::Mirror::PROFILE;
 					my $old_implementation = $implementation;
 					my $package = ref( ${ $mirror } );
 					$implementation = sub {
-						$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
-						&$old_implementation;
+						my $caller = '';
+						if ($profileLevel == 2) {
+							my($pack, $file, $line) = caller;
+							$caller = "$file ($line)";
+							$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}->{$caller}++;
+						} else {
+							$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
+						}
+						goto &$old_implementation;
 					};
 				}
 				return $implementation;
@@ -834,13 +842,21 @@ $Class::Prototyped::Mirror::attributes = {
 			code => sub {
 				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
 
-				if ($slotAttribs->{profile}) {
+				my $profileLevel = $slotAttribs->{profile};
+				if ($profileLevel) {
 					package Class::Prototyped::Mirror::PROFILE;
 					my $old_implementation = $implementation;
 					my $package = ref( ${ $mirror } );
 					$implementation = sub {
-						$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
-						&$old_implementation;
+						my $caller = '';
+						if ($profileLevel == 2) {
+							my($pack, $file, $line) = caller;
+							$caller = "$file ($line)";
+							$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}->{$caller}++;
+						} else {
+							$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
+						}
+						goto &$old_implementation;
 					};
 				}
 				return $implementation;
@@ -2447,8 +2463,11 @@ of C<Class::Prototyped> objects!
 
 =item C<profile> (C<filter>, rank 80)
 
-Increments C<< $Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName} >> 
-everytime the slot is accessed.
+If C<profile> is set to 1, increments C<< 
+$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName} >> 
+everytime the slot is accessed.  If C<profile> is set to 2, increments C<< 
+$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}->{$caller} >>
+everytime the slot is accessed, where C<$caller> is C<"$file ($line)">.
 
 =item C<wantarray> (C<filter>, rank 90)
 
