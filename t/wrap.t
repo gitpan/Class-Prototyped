@@ -1,12 +1,16 @@
-# Demonstrate wrapping
 use strict;
 $^W++;
 use Class::Prototyped qw(:EZACCESS);
+use Data::Dumper;
 use Test;
+
 BEGIN {
   $|++;
   plan tests => 11
 }
+
+$Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Sortkeys = 1;
 
 package main;
 

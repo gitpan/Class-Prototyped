@@ -1,5 +1,71 @@
 Revision history for Perl extension Class::Prototyped
 
+0.95  Mon Sep 8 2003
+ - Minor changes to POD
+ - Minor changes to test code
+
+0.94  Thu Jan 9 2003 (not released)
+ - Rationalized and codified attribute support
+ - Moved addSlots parsing/checking code into separate method from
+   implementation, thus eating up a good chunk of the optimizations.
+   On the other hand, this improved the handling of error conditions
+   in addSlots and exposes the parsing to external code.  In addition,
+   implementation of slots was moved into separate method so that the
+   slots could be parsed, then modified in parsed form, and then passed
+   to the implementor.
+ - Cleared up bug that caused infinite recursion when non-C::P structured
+   objects that inherit from C::P from call $self->reflect->super().  Using
+   reflect on objects (not classes) that are not C::P structured is still
+   fraught with peril, but super is at least safe.
+ - Added support for defaultAttributes.
+ - Unfortunately, we lost the performance battle.  Package creation is
+   running slightly faster than in 0.90.  Package instantion from subs is
+   running much faster.  addSlots, however, is running around 20% slower
+   (it's a hard call because there are both constant and proportional terms).
+   Individual calls appear to be slightly faster, but each slot handled in
+   the call appears to be somewhat slower.  All in all, the optimizations
+   applied have managed to keep in check the performance hits from all of the
+   added functionality.
+ - Added support for FIELD attribute 'autoload' (i.e. FIELD slots that are
+   initialized with a subroutine reference - the first access to the FIELD
+   slot causes the subroutine to be executed).  Tied interface access to
+   these slots is _not_ supported for the first call.
+ - Added support for the FIELD attribute 'wantarray'.  This looks at the
+   wantarray value to determine whether to unwrap an array reference and
+   return it as a list.
+ - Added incomplete support for the METHOD attribute 'profile'.  This
+   keeps track of the number of calls to this method in a C::P::Mirror
+   global.
+
+0.93  Mon Jan 6 2003 (not released)
+ - Lots of attempted and somewhat successful optimizations
+ - Addition of :NO_CHECK import option that eliminates additional checks
+   in order to improve performance
+ - More work remains to be done in this area - packages are expensive, and
+   any work that can be done to optimize this would be advantageous.
+
+0.92  Fri Jan 3 2003 (not released)
+ - Added support for extended slot syntax via anonymous arrays for addSlots
+ - Migrated trailing character support (second * for parent slots,
+   ! on methods, & on fields) to use slot attributes.  First two
+   notations maintained for backward compatibility, but deprecated.
+ - Defined optimizations for extended slot syntax
+ - Updated tests and documentation to use extended slot syntax
+ - Updated getSlot to use extended slot syntax
+ - Added support to getSlot for format parameter
+ - Moved Carp::Croak lines to head of addSlots so object remains unchanged
+
+0.91  Sun Dec 29 2002 (not released)
+ - Added support for constant field slots using trailing & notation
+ - Added tiedInterfacePackage to C::P::M
+ - Modified C::P::new to respect return value of tiedInterfacePackage
+ - tiedInterfacePackage is now read/write!
+ - :TIED_INTERFACE is being removed (good riddance!)
+ - tiedInterfacePackage is inherited when class packages are objectified
+ - Oodles of tests on the new tied interface support
+ - Tests for the new constant field slot support
+
+
 0.90  Wed Dec 18 2002
  - Moved addition of DESTROY symbol table entry in newPackage into
    code guarded by check for PREFIXED package name

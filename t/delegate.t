@@ -1,13 +1,16 @@
-# Delegation
 use strict;
 $^W++;
 use Class::Prototyped qw(:EZACCESS :SUPER);
+use Data::Dumper;
 use Test;
 
 BEGIN {
   $|++;
   plan tests => 14;
 }
+
+$Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Sortkeys = 1;
 
 package A;
 sub a {

@@ -85,6 +85,28 @@ CONCEPTS
     holding up a mirror enables us to look upon an object's structure
     without name space collisions.
 
+    Once you have a mirror, you can add and delete slots like so:
+
+        my $cp = Class::Prototyped->new();
+        my $mirror = $cp->reflect();
+        $mirror->addSlots(
+          field1 => 'foo',
+          sub1   => sub {
+            print "this is sub1 printing field1: '".$_[0]->field1."'\n";
+          },
+        );
+
+        $mirror->deleteSlot('sub1');
+
+    In addition, there is a more verbose syntax for "addSlots" where the
+    slot name is replaced by an anonymous array - this is most commonly used
+    to control the slot attributes.
+
+        $cp->reflect->addSlot(
+          [qw(field1 FIELD)] => 'foo',
+          [qw(sub1 METHOD)]  => sub { print "hi there.\n"; },
+        );
+
     Because the mirror methods "super", "addSlot"("s"), "deleteSlot"("s"),
     and "getSlot"("s") are called frequently on objects, there is an import
     keyword ":EZACCESS" that adds methods to the object space that call the
@@ -244,10 +266,8 @@ CONCEPTS
 
     If you need to reorder the parent slots on an object, look at
     "promoteParents". That said, there's a shortcut for prepending a slot to
-    the inheritance hierarchy. Simply add a second asterisk to the end of
-    the slotname when calling "addSlots". The second asterisk will be
-    automatically stripped from the end of the slotname before the slot is
-    prepended to the hierarchy.
+    the inheritance hierarchy. Simply define "'promote'" as a slot attribute
+    using the extended slot syntax.
 
     Finally, in keeping with our principle that classes are first-class
     object, the inheritance hierarchy of classes can be modified through
@@ -255,7 +275,7 @@ CONCEPTS
     following code adds the "$foo" object as a parent of the MyClass class,
     prepending it to the inheritance hierarchy:
 
-        MyClass->reflect->addSlots('foo**' => $foo);
+        MyClass->reflect->addSlots([qw(foo* promote)] => $foo);
 
   Operator Overloading
 
@@ -329,9 +349,10 @@ CONCEPTS
     because we'd rather not write code that attempts to guess as to whether
     or not the subroutine uses the "super" construct, you have to tell
     "addSlots" that the subroutine needs to have this wrapper placed around
-    it. To do this, simply append an "!" to the end of the slot name. This
-    "!" does not belong to the slot name - it is simply an indicator to
-    "addSlots" that the subroutine needs to have "super" support enabled.
+    it. To do this, simply use the extended "addSlots" syntax (see the
+    method description for more information) and pass in the slot attribute
+    "'superable'". The following examples use the minimalist form of the
+    extended syntax.
 
     For instance, the following code will work:
 
@@ -342,8 +363,8 @@ CONCEPTS
         );
 
         my $p2 = Class::Prototyped->new(
-            '*'       => $p1,
-            'method!' => sub {
+            '*'                     => $p1,
+            [qw(method superable)]' => sub {
                 print "this is method in p2 calling method in p1: ";
                 $_[0]->reflect->super('method');
             },
@@ -359,15 +380,15 @@ CONCEPTS
       $foo->reflect->addSlot($bar->reflect->getSlot('method'));
 
     When the "getSlot" method is called in an array context, it returns both
-    the slot name and the slot. If it notices that the slot in question is a
-    method and that it is a method wrapped so that inherited methods can be
-    called, it will automatically append an "!" to the returned slot name,
-    thus making it safe for use in "addSlot".
+    the complete format for the slot identifier and the slot. If it notices
+    that the slot in question is that it is a wrapped so that inherited
+    methods can be called, it will automatically supply the "'superable'"
+    attribute, thus making it safe for use in "addSlot".
 
     Finally, to help protect the code, the "super" method is smart enough to
     determine whether it was called within a wrapped subroutine. If it
-    wasn't, it croaks, thus indicating that the method should have had an
-    "!" appended to the slot name when it was added. If you wish to disable
+    wasn't, it croaks, thus indicating that the method should have had the
+    "'superable'" attribute set when it was added. If you wish to disable
     this checking (which will improve the performance of your code, of
     course, but could result in very hard to trace bugs if you haven't been
     careful), see the import option ":SUPER_FAST".
@@ -414,24 +435,14 @@ IMPORT OPTIONS
           $foo->say_hi;
 
     :TIED_INTERFACE
-        This allows you to specify the sort of tied interface you wish to
-        offer when code attempts to access a "Class::Prototyped" object as a
-        hash reference. This option expects that the second parameter will
-        specify either the package name or an alias. The currently known
-        aliases are:
-
-        default
-            This specifies "Class::Prototyped::Tied::Default" as the tie
-            class. The default behavior is to allow access to existing
-            fields, but attempts to create fields, access methods, or delete
-            slots will croak.
-
-        autovivify
-            This specifies "Class::Prototyped::Tied::AutoVivify" as the tie
-            class. The behavior of this package allows access to existing
-            fields, will automatically create field slots if they don't
-            exist, and will allow deletion of field slots. Attempts to
-            access or delete method or parent slots will croak.
+        This is no longer supported. Sorry for the very short notice - if
+        you have a specific need, please let me know and I will discuss your
+        needs with you and determine whether they can be addressed in a
+        manner that doesn't require you to rewrite your code, but still
+        allows others to make use of less global control over the tied
+        interfaces used. See
+        "Class::Prototyped::Mirror::tiedInterfacePackage" for the preferred
+        way of doing this.
 
 "Class::Prototyped" Methods
   new() - Construct a new "Class::Prototyped" object.
@@ -458,7 +469,7 @@ IMPORT OPTIONS
 
         my $foo = MyClass->new(
             field1  => 123,
-            'bar**' => $bar,
+            [qw(bar* promote)] => $bar,
         );
 
   newPackage() - Construct a new "Class::Prototyped" object in a
@@ -577,6 +588,95 @@ specific package.
         );
         $p->doSomething( $p->fred );
 
+    In addition to the simple form, there is an extended syntax for
+    specifying the slot. In place of the slotname, pass an array reference
+    composed like so:
+
+    "addSlots( [$slotName, $slotType, %slotAttributes] => $slotValue );"
+
+    "$slotName" is simply the name of the slot, including the trailing "*"
+    if it is a parent slot. "$slotType" should be "'FIELD'", "'METHOD'", or
+    "'PARENT'". "%slotAttributes" should be a list of attribute/value pairs.
+    It is common to use qw() to reduce the amount of typing:
+
+        $p->reflect->addSlot(
+            [qw(bar FIELD)] => "this is a field",
+        );
+
+        $p->reflect->addSlot(
+            [qw(bar FIELD constant 1)] => "this is a constant field",
+        );
+
+        $p->reflect->addSlot(
+            [qw(foo METHOD)] => sub { print "normal method.\n"; },
+        );
+
+        $p->reflect->addSlot(
+            [qw(foo METHOD superable 1)] => sub { print "superable method.\n"; },
+        );
+
+        $p->reflect->addSlot(
+            [qw(parent* PARENT)] => $parent,
+        );
+
+        $p->reflect->addSlot(
+            [qw(parent2* PARENT promote 1)] => $parent2,
+        );
+
+    To make using the extended syntax a bit less cumbersome, however, the
+    following shortcuts are allowed:
+
+    *   "$slotType" can be omitted. In this case, the slot's type will be
+        determined by inspecting the slot's name (to determine if it is a
+        parent slot) and the slot's value (to determine whether it is a
+        field or method slot). The "$slotType" value can, however, be used
+        to supply a reference to a code object as the value for a field
+        slot. Note that this means that "FIELD", "METHOD", and "PARENT" are
+        not legal attribute names (since this would make parsing difficult).
+
+    *   If there is only one attribute and if the value is "1", then the
+        value can be omitted.
+
+    Using both of the above contractions, the following are valid short
+    forms for the extended syntax:
+
+        $p->reflect->addSlot(
+            [qw(bar constant)] => "this is a constant field",
+        );
+
+        $p->reflect->addSlot(
+            [qw(foo superable)] => sub { print "superable method.\n"; },
+        );
+
+        $p->reflect->addSlot(
+            [qw(parent2* promote)] => $parent2,
+        );
+
+    The currently defined slot attributes are as follows:
+
+    Field Slots
+        "constant"
+            When true, this defines the field slot as constant, disabling
+            the ability to modify it using the "$object->field($newValue)"
+            syntax. The value may still be modified using the hash syntax
+            (i.e. "$object->{field} = $newValue"). This is mostly useful if
+            you have an object method call that takes parameters, but you
+            wish to replace it on a given object with a hard-coded value by
+            using a field (which makes inspecting the value of the slot
+            through "Data::Dumper" much easier since code objects are
+            opaque).
+
+    Method Slots
+        "superable"
+            When true, this enables the "$self->reflect->super( . . . )"
+            calls for this method slot.
+
+    Parent Slots
+        "promote"
+            When true, this parent slot is promoted ahead of any other
+            parent slots on the object. This attribute is ephemeral - it is
+            not returned by calls to "getSlot".
+
   deleteSlot() - An alias for deleteSlots
 
   deleteSlots() - Delete one or more of the receiver's slots by name
@@ -639,16 +739,63 @@ defined for the entire inheritance hierarchy
     Note that this will return duplicate slot names if inherited slots are
     obscured.
 
-  getSlot() - Returns a list of all the slots
+  getSlot() - Returns the requested slot
+
+    When called in scalar context, this returns the thing in the slot. When
+    called in list context, it returns both the complete form of the
+    extended syntax for specifying a slot name and the thing in the slot.
+    There is an optional parameter that can be used to modify the format of
+    the return value in list context. The allowable values are:
+
+    *   "'default'" - the extended slot syntax and the slot value are
+        returned
+
+    *   "'simple'" - the slot name and the slot value are returned. Note
+        that in this mode, there is no access to any attributes the slot may
+        have
+
+    *   "'rotated'" - the slot name and the following hash are returned like
+        so:
+
+          $slotName => {
+            attribs => %slotAttribs,
+            type => $slotType,
+            value => $slotValue
+          },
+
+    The latter two options are quite useful when used in conjunction with
+    the "getSlots" method.
 
   getSlots() - Returns a list of all the slots
 
-    This returns a list of slotnames and their values ready for sending to
-    "addSlots". It takes the same optional parameter passed to "slotNames".
+    This returns a list of extended syntax slot specifiers and their values
+    ready for sending to "addSlots". It takes first the optional parameter
+    passed to "slotNames" which specifies the type of slot ("'FIELD'",
+    "'METHOD'", "'PARENT'", or "undef") and then the optional parameter
+    passed to "getSlot", which specifies the format for the return value. If
+    the latter is "'simple'", the returned values can be passed to
+    "addSlots", but any non-default slot attributes (i.e. "superable" or
+    "constant") will be lost. If the latter is "'rotated'", the returned
+    values are completely inappropriate for passing to "addSlots". Both
+    "'simple'" and "'rotated'" are appropriate for assigning the return
+    values into a hash.
 
     For instance, to add all of the field slots in "$bar" to "$foo":
 
       $foo->reflect->addSlots($bar->reflect->getSlots('FIELD'));
+
+    To get a list of all of the slots in the "'simple'" format:
+
+      my %barSlots = $bar->reflect->getSlots(undef, 'simple');
+
+    To get a list of all of the superable method slots in the "'rotated'"
+    format:
+
+      my %barMethods = $bar->reflect->getSlots('METHOD', 'rotated');
+      foreach my $slotName (%barMethods) {
+        delete $barMethods{$slotName}
+          unless $barMethods{$slotName}->{attribs}->{superable};
+      }
 
   promoteParents() - This changes the ordering of the parent slots
 
@@ -658,6 +805,39 @@ defined for the entire inheritance hierarchy
     in the order that they are passed. Unspecified parent slots will retain
     their current positions relative to other unspecified parent slots, but
     as a group they will be moved to the end of the hierarchy.
+
+  tiedInterfacePackage() - This specifies the tied interface package
+
+    This allows you to specify the sort of tied interface you wish to offer
+    when code accesses the object as a hash reference. If no parameter is
+    passed, this will return the current tied interface package active for
+    the object. If a parameter is passed, it should specify either the
+    package name or an alias. The currently known aliases are:
+
+    default
+        This specifies "Class::Prototyped::Tied::Default" as the tie class.
+        The default behavior is to allow access to existing fields, but
+        attempts to create fields, access methods, or delete slots will
+        croak. This is the tie class used by "Class::Prototyped" (unless you
+        do something very naughty and call
+        "Class::Prototyped->reflect->tiedInterfacePackage($not_default)"),
+        and as such is the fallback behavior for classes and objects if they
+        don't get a different value from their inheritance.
+
+    autovivify
+        This specifies "Class::Prototyped::Tied::AutoVivify" as the tie
+        class. The behavior of this package allows access to existing
+        fields, will automatically create field slots if they don't exist,
+        and will allow deletion of field slots. Attempts to access or delete
+        method or parent slots will croak.
+
+    Calls to "new" and "clone" will use the tied interface in use on the
+    existing object/package. When "reflect" is called for the first time on
+    a class package, it will use the tied interface of its first parent
+    class (i.e. "$ISA[0]"). If that package has not yet had "reflect" called
+    on it, it will check its parent, and so on and so forth. If none of the
+    packages in the primary inheritance fork have been reflected upon, the
+    value for "Class::Prototyped" will be used, which should be "default".
 
   wrap()
 
@@ -708,14 +888,14 @@ defined for the entire inheritance hierarchy
     thisObject().
 
 AUTHOR
-    Written by Ned Konz, perl@bike-nomad.com and Toby Everett,
-    teverett@alascom.att.com or toby@everettak.org. 5.005_03 porting by
-    chromatic.
+    Written by Ned Konz, perl@bike-nomad.com and Toby Ovod-Everett,
+    tovod-everett@alascom.att.com or toby@ovod-everett.org. 5.005_03 porting
+    by chromatic.
 
-    Toby Everett is currently maintaining the package.
+    Toby Ovod-Everett is currently maintaining the package.
 
 LICENSE
-    Copyright (c) 2001, 2002 Ned Konz and Toby Everett. All rights reserved.
+    Copyright 2001-2003 Ned Konz and Toby Ovod-Everett. All rights reserved.
     This program is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.
 

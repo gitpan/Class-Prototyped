@@ -1,7 +1,7 @@
-# vim: ft=perl
 use strict;
 $^W++;
 use Class::Prototyped qw(:REFLECT);
+use Data::Dumper;
 use Test;
 use IO::File;
 
@@ -9,6 +9,9 @@ BEGIN {
   $|++;
   plan tests => 18;
 }
+
+$Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Sortkeys = 1;
 
 my $fileName = 't/xxxtest.pl';
 my $file = IO::File->new( ">$fileName" )

@@ -7,9 +7,13 @@ Makefile.PL
 README
 examples/graph.png
 examples/graphtest.pl
+perf/package_creation.pl
+perf/references.pl
 t/classReflect.t
+t/constant.t
 t/delegate.t
 t/destroy.t
+t/extendedSyntax.t
 t/include.t
 t/reflectAny.t
 t/super.t

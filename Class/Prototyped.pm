@@ -1,204 +1,215 @@
+#############################################################################
+#
 # Class::Prototyped - Fast prototype-based OO programming in Perl
-# $Revision: 1.37 $
+#
+# Author: Ned Konz and Toby Ovod-Everett
+#############################################################################
+# Copyright 2001-2003 Ned Konz and Toby Ovod-Everett.  All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the same terms as Perl itself.
+#
+# For comments, questions, bugs or general interest, feel free to
+# contact Toby Ovod-Everett at tovod-everett@alascom.att.com
+#############################################################################
+
+# Class::Prototyped - Fast prototype-based OO programming in Perl
+
+package Class::Prototyped::Mirror;
+sub PREFIX()        { 'PKG0x' }
+sub PREFIX_LENGTH() { 5 }
+
 
 package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '0.90';
+$Class::Prototyped::VERSION = '0.95';
 
 sub import {
-  while ( my $symbol = shift ) {
-    if ( $symbol eq ':OVERLOAD' ) {
-      unless ( scalar keys %Class::Prototyped::overloadable_symbols ) {
-        eval "use overload";
-        @Class::Prototyped::overloadable_symbols{ map {split}
-          values %overload::ops } = undef;
-      }
-    }
-    elsif ( $symbol eq ':REFLECT' ) {
-      *UNIVERSAL::reflect =
-        sub { Class::Prototyped::Mirror->new( $_[0] ) };
-    }
-    elsif ( $symbol eq ':EZACCESS' ) {
-      no strict 'refs';
+	while (my $symbol = shift) {
+		if ($symbol eq ':OVERLOAD') {
+			unless (scalar keys %Class::Prototyped::overloadable_symbols) {
+				eval "use overload";
+				@Class::Prototyped::overloadable_symbols{ map { split }
+						values %overload::ops } = undef;
+			}
+		}
+		elsif ($symbol eq ':REFLECT') {
+			*UNIVERSAL::reflect =
+				sub { Class::Prototyped::Mirror->new($_[0]) };
+		}
+		elsif ($symbol eq ':EZACCESS') {
+			no strict 'refs';
 
-      foreach my $call (
-        qw(addSlot addSlots deleteSlot deleteSlots getSlot getSlots super)
-        ) {
-        *{$call} = sub {
-          # unshift ( @_, shift->reflect );
-          # goto &{ UNIVERSAL::can( $_[0], $call ) };
-          my $obj = shift->reflect;
-          UNIVERSAL::can( $obj, $call )->( $obj, @_ );
-        };
-      }
-    }
-    elsif ( $symbol eq ':SUPER_FAST' ) {
-      *Class::Prototyped::Mirror::super =
-        \&Class::Prototyped::Mirror::super_fast;
-    }
-    elsif ( $symbol eq ':NEW_MAIN' ) {
-      *main::new = sub { Class::Prototyped->new(@_) };
-    }
-    elsif ( $symbol eq ':TIED_INTERFACE' ) {
-      my $value   = shift;
-      my $package = {
-        'default'    => 'Class::Prototyped::Tied::Default',
-        'autovivify' => 'Class::Prototyped::Tied::AutoVivify',
-      }->{$value} || $value;
-
-      if ( $package eq $value && scalar( keys %{"$package\::"} ) == 0 ) {
-        eval "use $package";
-        Carp::croak
-"attempt to import package for :TIED_INTERFACE failed:\n$package"
-          if $@;
-      }
-      local $^W = 0;
-      *Class::Prototyped::Mirror::DEFAULT_TIED_INTERFACE = sub {$package};
-    }
-  }
+			foreach my $call (
+				qw(addSlot addSlots deleteSlot deleteSlots getSlot getSlots super)
+			) {
+				*{$call} = sub {
+					my $obj = shift->reflect;
+					UNIVERSAL::can($obj, $call)->($obj, @_);
+				};
+			}
+		}
+		elsif ($symbol eq ':SUPER_FAST') {
+			*Class::Prototyped::Mirror::super =
+				\&Class::Prototyped::Mirror::super_fast;
+		}
+		elsif ($symbol eq ':NEW_MAIN') {
+			*main::new = sub { Class::Prototyped->new(@_) };
+		}
+	}
 }
 
 # Constructor. Pass in field definitions.
 sub new {
-  my $self = {};
-  tie %$self, &Class::Prototyped::Mirror::DEFAULT_TIED_INTERFACE();
-  my $package =
-    &Class::Prototyped::Mirror::PREFIX
-    . substr( "$self", 7, -1 );    # HASH($package)
-  my $class = shift;
-  Carp::croak("odd number of arguments to new\n") if scalar(@_) % 2;
-  $class->newPackage( $package, $self, @_ );
+	my $class = shift;
+
+	my $self = {};
+	my $package =
+		Class::Prototyped::Mirror::PREFIX
+		. substr("$self", 7, -1);    # HASH($package)
+
+	Carp::croak("odd number of arguments to new\n") if scalar(@_) % 2;
+
+	tie %$self, $class->reflect->tiedInterfacePackage();
+	$class->newPackage($package, $self, @_);
 }
 
 sub newPackage {
-  my $class   = shift;
-  my $package = shift;
+	my $class   = shift;
+	my $package = shift;
 
-  my ( $self, $tied );
-  {
-    no strict 'refs';
+	my $class_mirror = $class->reflect;
 
-    if ( substr( $package, 0, &Class::Prototyped::Mirror::PREFIX_LENGTH ) ne
-      &Class::Prototyped::Mirror::PREFIX )
-    {
-      if ( scalar( keys %{"$package\::"} ) ) {
-        Carp::croak(
-          "attempt to use newPackage with already existing package\n"
-          . "package: $package" );
-      }
-      my %self;
-      tie %self, &Class::Prototyped::Mirror::DEFAULT_TIED_INTERFACE();
-      $tied = tied %self;
-      $Class::Prototyped::Mirror::objects{$package} = $self = \%self;
-    }
-    else {
-      $self = shift;
-      $tied = tied %$self;
-      *{"$package\::DESTROY"} = \&Class::Prototyped::DESTROY;
-    }
-  }
+	my ($self, $tied);
+	{
+		no strict 'refs';
 
-  $tied->package($package);
-  @{ $tied->isa } = qw(Class::Prototyped);
-  $tied->vivified_parents(1);
-  $tied->vivified_methods(1);
+		if (substr($package, 0, Class::Prototyped::Mirror::PREFIX_LENGTH) ne
+			Class::Prototyped::Mirror::PREFIX)
+		{
+			if (scalar(keys %{"$package\::"})) {
+				Carp::croak(
+					"attempt to use newPackage with already existing package\n"
+						. "package: $package");
+			}
+			my %self;
+			tie %self, $class_mirror->tiedInterfacePackage();
+			$tied = tied %self;
+			$Class::Prototyped::Mirror::objects{$package} = $self = \%self;
+		}
+		else {
+			$self = shift;
+			$tied = tied %$self;
+			*{"$package\::DESTROY"} = \&Class::Prototyped::DESTROY;
+		}
+	}
 
-  bless $self, $package;    # in my own package
+	$tied->package($package);
+	@{ $tied->{isa} } = qw(Class::Prototyped);
+	$tied->{vivified_parents} = 1;
+	$tied->{vivified_methods} = 1;
+	$tied->{defaults} = $class_mirror->_defaults;
 
-  $class = ref($class) || $class;    # allow object to provide a class
-  unless ( @_ and grep { $_[ $_ * 2 ] eq 'class*' } 0 .. $#_ / 2 ) {
-    no strict 'refs';
-    if ( substr( $class, 0, &Class::Prototyped::Mirror::PREFIX_LENGTH ) ne
-      &Class::Prototyped::Mirror::PREFIX && $class ne 'Class::Prototyped' )
-    {
-      $self->reflect->addSlots( 'class*' => $class );
-    }
-  }
+	bless $self, $package;    # in my own package
 
-  $self->reflect->addSlots(@_);
-  return $self;
+	$class = ref($class) || $class;    # allow object to provide a class
+
+	my $parsedSlots = scalar @_ ? $self->reflect->addSlotsParser(@_) : [];
+
+	if (!(grep { $_->[0] eq 'class*' } @$parsedSlots) &&
+			substr($class, 0, Class::Prototyped::Mirror::PREFIX_LENGTH) ne
+			Class::Prototyped::Mirror::PREFIX && $class ne 'Class::Prototyped')
+	{
+		unshift(@$parsedSlots, @{$self->reflect->addSlotsParser('class*' => $class)});
+	}
+
+	$self->reflect->addParsedSlots($parsedSlots) if scalar(@$parsedSlots);
+
+	return $self;
 }
 
 # Creates a copy of an object
 sub clone {
-  my $original = shift;
-  ( ref($original) ? $original : 'Class::Prototyped' )
-    ->new( $original->reflect->getSlots, @_ );
+	my $original = shift;
+
+	(ref($original) ? $original : 'Class::Prototyped')
+		->new($original->reflect->getSlots, @_);
 }
 
 sub reflect {
-  return Class::Prototyped::Mirror->new( $_[0] );
+	return $Class::Prototyped::Mirror::mirrors{ $_[0] } || Class::Prototyped::Mirror->new($_[0]);
 }
 
 sub destroy {
-  my $self = shift;
-  my $mirror = $self->reflect;
-  $mirror->deleteSlots( grep { $mirror->slotType($_) ne 'PARENT' } $mirror->slotNames );
+	my $self   = shift;
+	my $mirror = $self->reflect;
+	my(@otherOrder) = @{$mirror->_otherOrder};
+	$mirror->deleteSlots(@otherOrder);
 }
 
 # Remove my symbol table
 sub DESTROY {
-  my $self = shift;
-  my $package = ref($self);
-  if ( ( substr( $package, 0, &Class::Prototyped::Mirror::PREFIX_LENGTH ) eq
-    &Class::Prototyped::Mirror::PREFIX )
-    && ( $package ne 'Class::Prototyped' ) )
-  {
-    no strict 'refs';
+	my $self    = shift;
+	my $package = ref($self);
+	if ((substr($package, 0, Class::Prototyped::Mirror::PREFIX_LENGTH) eq
+			Class::Prototyped::Mirror::PREFIX)
+		&& ($package ne 'Class::Prototyped'))
+	{
+		no strict 'refs';
 
-    my $tied        = tied(%$self) or return;
-    my $parentOrder = $tied->parentOrder;
-    my $isa         = $tied->isa;
-    my $slots       = $tied->slots;
+		my $tied        = tied(%$self) or return;
+		my $parentOrder = $tied->{parentOrder};
+		my $isa         = $tied->{isa};
+		my $slots       = $tied->{slots};
 
-    my (@deadIndices);
-    foreach my $i ( 0 .. $#$parentOrder ) {
-      my $parent        = $slots->{ $parentOrder->[$i] };
-      my $parentPackage = ref($parent) || $parent;
-      push ( @deadIndices, $i )
-        unless scalar( keys %{"$parentPackage\::"} );
-    }
+		my (@deadIndices);
+		foreach my $i (0 .. $#$parentOrder) {
+			my $parent = $slots->{ $parentOrder->[$i] };
+			my $parentPackage = ref($parent) || $parent;
+			push (@deadIndices, $i)
+				unless scalar(keys %{"$parentPackage\::"});
+		}
 
-    foreach my $i (@deadIndices) {
-      delete( $slots->{ $parentOrder->[$i] } );
-      splice( @$parentOrder, $i, 1 );
-      splice( @$isa,         $i, 1 );
-    }
+		foreach my $i (@deadIndices) {
+			delete($slots->{ $parentOrder->[$i] });
+			splice(@$parentOrder, $i, 1);
+			splice(@$isa,         $i, 1);
+		}
 
-    # this is required to re-cache @ISA
-    delete ${"$package\::"}{'::ISA::CACHE::'};
+		# this is required to re-cache @ISA
+		delete ${"$package\::"}{'::ISA::CACHE::'};
 
-    my $parent_DESTROY;
-    my(@isa_queue) = @{"$package\::ISA"};
-    my(%isa_cache);
-    while (my $pkg = shift @isa_queue) {
-      exists $isa_cache{$pkg} and next;
-      my $code = *{"$pkg\::DESTROY"}{CODE};
-      if (defined $code && $code != \&Class::Prototyped::DESTROY) {
-        $parent_DESTROY = $code;
-        last;
-      }
-      unshift(@isa_queue, @{"$pkg\::ISA"});
-      $isa_cache{$pkg} = undef;
-    }
+		my $parent_DESTROY;
+		my (@isa_queue) = @{"$package\::ISA"};
+		my (%isa_cache);
+		while (my $pkg = shift @isa_queue) {
+			exists $isa_cache{$pkg} and next;
+			my $code = *{"$pkg\::DESTROY"}{CODE};
+			if (defined $code && $code != \&Class::Prototyped::DESTROY) {
+				$parent_DESTROY = $code;
+				last;
+			}
+			unshift (@isa_queue, @{"$pkg\::ISA"});
+			$isa_cache{$pkg} = undef;
+		}
 
-    $self->destroy;                     # call the user destroy function
+		$self->destroy;    # call the user destroy function
 
-    $parent_DESTROY->($self) if defined $parent_DESTROY;
+		$parent_DESTROY->($self) if defined $parent_DESTROY;
 
-    $self->reflect->deleteSlots( $self->reflect->slotNames('PARENT') );
+		$self->reflect->deleteSlots($self->reflect->slotNames('PARENT'));
 
-    foreach my $key ( keys %{"$package\::"} ) {
-      delete ${"$package\::"}{$key};
-    }
+		foreach my $key (keys %{"$package\::"}) {
+			delete ${"$package\::"}{$key};
+		}
 
-    # this only works because we're not a multi-level package:
-    delete( $main::{"$package\::"} );
+		# this only works because we're not a multi-level package:
+		delete($main::{"$package\::"});
 
-    delete( $Class::Prototyped::Mirror::parents{$package} );
-  }
+		delete($Class::Prototyped::Mirror::parents{$package});
+	}
 }
 
 $Class::Prototyped::Mirror::ending = 0;
@@ -208,91 +219,64 @@ package Class::Prototyped::Tied;
 @Class::Prototyped::Tied::DONT_LIE_FOR = qw(Data::Dumper);
 
 sub TIEHASH {
-  bless {
-    package          => undef,
-    isa              => undef,
-    parentOrder      => [],
-    otherOrder       => [],
-    slots            => {},
-    vivified_parents => 0,
-    vivified_methods => 0,
-    },
-    $_[0];
+	bless $_[1] || {
+			package          => undef,
+			isa              => undef,
+			parentOrder      => [],
+			otherOrder       => [],
+			slots            => {},
+			types            => {},
+			attribs          => {},
+			defaults         => undef,
+			vivified_parents => 0,
+			vivified_methods => 0,
+		},
+		$_[0];
 }
 
 sub FIRSTKEY {
-  $_[0]->{dont_lie} = 0;
-  my $caller = ( caller(0) )[0];
-  foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
-    $_[0]->{dont_lie} = $caller eq $i and last;
-  }
-  $_[0]->{iter}        = 1;
-  $_[0]->{cachedOrder} = $_[0]->slotOrder;
+	$_[0]->{dont_lie} = 0;
+	my $caller = (caller(0))[0];
+	foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
+		$_[0]->{dont_lie} = $caller eq $i and last;
+	}
+	$_[0]->{iter}        = 1;
+	$_[0]->{cachedOrder} = [@{ $_[0]->{parentOrder} }, @{ $_[0]->{otherOrder} }];
 
-  unless ( $_[0]->{dont_lie} ) {
-    my $slots = $_[0]->slots;
-    @{ $_[0]->{cachedOrder} } =
-      grep { !UNIVERSAL::isa( $slots->{$_}, 'CODE' ) }
-      @{ $_[0]->{cachedOrder} };
-  }
-  return $_[0]->slotOrder->[0];
+	unless ($_[0]->{dont_lie}) {
+		my $slots = $_[0]->{slots};
+		@{ $_[0]->{cachedOrder} } =
+			grep { !UNIVERSAL::isa($slots->{$_}, 'CODE') }
+			@{ $_[0]->{cachedOrder} };
+	}
+	return $_[0]->{cachedOrder}->[0];
 }
 
 sub NEXTKEY {
-  return $_[0]->{cachedOrder}->[ $_[0]->{iter}++ ];
+	return $_[0]->{cachedOrder}->[ $_[0]->{iter}++ ];
 }
 
 sub EXISTS {
-  exists $_[0]->{slots}->{ $_[1] } or return 0;
-  UNIVERSAL::isa( $_[0]->{slots}->{ $_[1] }, 'CODE' ) or return 1;
-  my $dont_lie = 0;
-  my $caller = ( caller(0) )[0];
-  foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
-    $dont_lie = $caller eq $i and last;
-  }
-  return $dont_lie ? 1 : 0;
+	exists $_[0]->{slots}->{ $_[1] } or return 0;
+	UNIVERSAL::isa($_[0]->{slots}->{ $_[1] }, 'CODE') or return 1;
+	my $dont_lie = 0;
+	my $caller   = (caller(0))[0];
+	foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
+		$dont_lie = $caller eq $i and last;
+	}
+	return $dont_lie ? 1 : 0;
 }
 
 sub CLEAR {
-  Carp::croak( "attempt to call CLEAR on the hash interface"
-    . " of a Class::Prototyped object\n" );
+	Carp::croak("attempt to call CLEAR on the hash interface"
+			. " of a Class::Prototyped object\n");
 }
 
 sub package {
-  return $_[0]->{package} unless @_ > 1;
-  no strict 'refs';
-  $_[0]->{isa}     = \@{"$_[1]\::ISA"};
-  $_[0]->{package} = $_[1];
-}
-
-sub isa {
-  $_[0]->{isa}
-    or Carp::croak("attempt to access isa without defined package\n");
-}
-
-sub parentOrder {
-  $_[0]->{parentOrder};
-}
-
-sub otherOrder {
-  $_[0]->{otherOrder};
-}
-
-# Read-only.
-sub slotOrder {
-  [ @{ $_[0]->{parentOrder} }, @{ $_[0]->{otherOrder} } ];
-}
-
-sub slots {
-  $_[0]->{slots};
-}
-
-sub vivified_parents {
-  @_ > 1 ? $_[0]->{vivified_parents} = $_[1] : $_[0]->{vivified_parents};
-}
-
-sub vivified_methods {
-  @_ > 1 ? $_[0]->{vivified_methods} = $_[1] : $_[0]->{vivified_methods};
+	return $_[0]->{package} unless @_ > 1;
+	no strict 'refs';
+	$_[0]->{isa}     = \@{"$_[1]\::ISA"};
+	$_[0]->{package} = $_[1];
 }
 
 #### Default Tied implementation
@@ -300,48 +284,48 @@ package Class::Prototyped::Tied::Default;
 @Class::Prototyped::Tied::Default::ISA = qw(Class::Prototyped::Tied);
 
 sub STORE {
-  my $slots = $_[0]->slots;
+	my $slots = $_[0]->{slots};
 
-  Carp::croak(
-    "attempt to access non-existent slot through tied hash object interface"
-    )
-    unless exists $slots->{ $_[1] };
+	Carp::croak(
+		"attempt to access non-existent slot through tied hash object interface"
+		)
+		unless exists $slots->{ $_[1] };
 
-  Carp::croak(
-    "attempt to access METHOD slot through tied hash object interface")
-    if UNIVERSAL::isa( $slots->{ $_[1] }, 'CODE' );
+	Carp::croak(
+		"attempt to access METHOD slot through tied hash object interface")
+		if UNIVERSAL::isa($slots->{ $_[1] }, 'CODE');
 
-  Carp::croak(
-    "attempt to modify parent slot through the tied hash object interface")
-    if substr( $_[1], -1 ) eq '*';
+	Carp::croak(
+		"attempt to modify parent slot through the tied hash object interface")
+		if substr($_[1], -1) eq '*';
 
-  $slots->{ $_[1] } = $_[2];
+	$slots->{ $_[1] } = $_[2];
 }
 
 sub FETCH {
-  my $slots = $_[0]->slots;
+	my $slots = $_[0]->{slots};
 
-  Carp::croak(
+	Carp::croak(
 "attempt to access non-existent slot through tied hash object interface:\n"
-    . "$_[1]" )
-    unless exists $slots->{ $_[1] };
+			. "$_[1]")
+		unless exists $slots->{ $_[1] };
 
-  if ( UNIVERSAL::isa( $slots->{ $_[1] }, 'CODE' ) ) {
-    my $dont_lie = 0;
-    my $caller = ( caller(0) )[0];
-    foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
-      $dont_lie = $caller eq $i and last;
-    }
-    Carp::croak(
-      "attempt to access METHOD slot through tied hash object interface")
-      unless $dont_lie;
-  }
+	if (UNIVERSAL::isa($slots->{ $_[1] }, 'CODE')) {
+		my $dont_lie = 0;
+		my $caller   = (caller(0))[0];
+		foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
+			$dont_lie = $caller eq $i and last;
+		}
+		Carp::croak(
+			"attempt to access METHOD slot through tied hash object interface")
+			unless $dont_lie;
+	}
 
-  $slots->{ $_[1] };
+	$slots->{ $_[1] };
 }
 
 sub DELETE {
-  Carp::croak "attempt to delete a slot through tied hash object interface";
+	Carp::croak "attempt to delete a slot through tied hash object interface";
 }
 
 #### AutoVivifying Tied implementation
@@ -349,91 +333,93 @@ package Class::Prototyped::Tied::AutoVivify;
 @Class::Prototyped::Tied::AutoVivify::ISA = qw(Class::Prototyped::Tied);
 
 sub STORE {
-  my $slots = $_[0]->slots;
+	my $slots = $_[0]->{slots};
 
-  Carp::croak(
-    "attempt to modify parent slot through the tied hash object interface")
-    if substr( $_[1], -1 ) eq '*';
+	Carp::croak(
+		"attempt to modify parent slot through the tied hash object interface")
+		if substr($_[1], -1) eq '*';
 
-  if ( exists $slots->{ $_[1] } ) {
-    Carp::croak(
-      "attempt to access METHOD slot through tied hash object interface")
-      if UNIVERSAL::isa( $slots->{ $_[1] }, 'CODE' );
-  }
-  else {
-    my $slot = $_[1];
-    $slots->{ $_[1] } = $_[2];
-    my $implementation = bless sub {
-      @_ > 1 ? $slots->{$slot} = $_[1] : $slots->{$slot};
-    }, 'Class::Prototyped::FieldAccessor';
-    no strict 'refs';
-    local $^W = 0;    # suppress redefining messages.
-    *{ $_[0]->package . "::$slot" } = $implementation;
-    push ( @{ $_[0]->otherOrder }, $slot );
-  }
+	if (exists $slots->{ $_[1] }) {
+		Carp::croak(
+			"attempt to access METHOD slot through tied hash object interface")
+			if UNIVERSAL::isa($slots->{ $_[1] }, 'CODE');
+	}
+	else {
+		my $slot = $_[1];
+		$slots->{ $_[1] } = $_[2];
+		my $implementation = bless sub {
+			@_ > 1 ? $slots->{$slot} = $_[1] : $slots->{$slot};
+		}, 'Class::Prototyped::FieldAccessor';
+		no strict 'refs';
+		local $^W = 0;    # suppress redefining messages.
+		*{ $_[0]->package . "::$slot" } = $implementation;
+		push (@{ $_[0]->{otherOrder} }, $slot);
+		$_[0]->{types}->{$slot} = 'FIELD';
+	}
 
-  Carp::croak(
-    "attempt to access non-existent slot through tied hash object interface"
-    )
-    unless exists $slots->{ $_[1] };
+	Carp::croak(
+		"attempt to access non-existent slot through tied hash object interface"
+		)
+		unless exists $slots->{ $_[1] };
 
-  $slots->{ $_[1] } = $_[2];
+	$slots->{ $_[1] } = $_[2];
 }
 
 sub FETCH {
-  my $slots = $_[0]->slots;
+	my $slots = $_[0]->{slots};
 
-  if ( exists $slots->{ $_[1] }
-    and UNIVERSAL::isa( $slots->{ $_[1] }, 'CODE' ) )
-  {
-    my $dont_lie = 0;
-    my $caller = ( caller(0) )[0];
-    foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
-      $dont_lie = $caller eq $i and last;
-    }
-    Carp::croak(
-      "attempt to access METHOD slot through tied hash object interface")
-      unless $dont_lie;
-  }
+	if (exists $slots->{ $_[1] }
+		and UNIVERSAL::isa($slots->{ $_[1] }, 'CODE'))
+	{
+		my $dont_lie = 0;
+		my $caller   = (caller(0))[0];
+		foreach my $i (@Class::Prototyped::Tied::DONT_LIE_FOR) {
+			$dont_lie = $caller eq $i and last;
+		}
+		Carp::croak(
+			"attempt to access METHOD slot through tied hash object interface")
+			unless $dont_lie;
+	}
 
-  $slots->{ $_[1] };
+	$slots->{ $_[1] };
 }
 
 sub EXISTS {
-  exists $_[0]->{slots}->{ $_[1] };
+	exists $_[0]->{slots}->{ $_[1] };
 }
 
 sub DELETE {
-  my $slots = $_[0]->slots;
+	my $slots = $_[0]->{slots};
 
-  if ( UNIVERSAL::isa( $slots->{ $_[1] }, 'CODE' )
-    && ( caller(0) )[0] ne 'Data::Dumper' )
-  {
-    Carp::croak
-      "attempt to delete METHOD slot through tied hash object interface";
-  }
+	if (UNIVERSAL::isa($slots->{ $_[1] }, 'CODE')
+		&& (caller(0))[0] ne 'Data::Dumper')
+	{
+		Carp::croak
+			"attempt to delete METHOD slot through tied hash object interface";
+	}
 
-  my $package = $_[0]->package;
-  my $slot    = $_[1];
-  {
-    no strict 'refs';
-    my $name = "$package\::$slot";
+	my $package = $_[0]->package;
+	my $slot    = $_[1];
+	{
+		no strict 'refs';
+		my $name = "$package\::$slot";
 
-    # save the glob...
-    local *old = *{$name};
+		# save the glob...
+		local *old = *{$name};
 
-    # and restore everything else
-    local *new;
-    foreach my $type (qw(HASH IO FORMAT SCALAR ARRAY)) {
-      my $elem = *old{$type};
-      next if !defined($elem);
-      *new = $elem;
-    }
-    *{$name} = *new;
-  }
-  my $otherOrder = $_[0]->otherOrder;
-  @$otherOrder = grep { $_ ne $slot } @$otherOrder;
-  delete $slots->{$slot};    # and delete the data/sub ref
+		# and restore everything else
+		local *new;
+		foreach my $type (qw(HASH IO FORMAT SCALAR ARRAY)) {
+			my $elem = *old{$type};
+			next if !defined($elem);
+			*new = $elem;
+		}
+		*{$name} = *new;
+	}
+	my $otherOrder = $_[0]->{otherOrder};
+	@$otherOrder = grep { $_ ne $slot } @$otherOrder;
+	delete $slots->{$slot};    # and delete the data/sub ref
+	delete $_[0]->{types}->{$slot};
 }
 
 # Everything that deals with modifying or inspecting the form
@@ -441,515 +427,906 @@ sub DELETE {
 
 package Class::Prototyped::Mirror;
 
-sub PREFIX() { 'PKG0x' };
-sub PREFIX_LENGTH() { 5 };
+sub new {
+	my $class = shift;
+	my($entity) = @_;
 
-sub DEFAULT_TIED_INTERFACE { 'Class::Prototyped::Tied::Default'; }
+	if ( ref($entity) ) {
+		if (substr(ref($entity), 0, Class::Prototyped::Mirror::PREFIX_LENGTH) eq
+				Class::Prototyped::Mirror::PREFIX)
+		{
+			return bless \$entity, $class;
+		}
+		elsif ($Class::Prototyped::Mirror::objects{ ref($entity) } == $entity) {
+			return $Class::Prototyped::Mirror::mirrors{ $entity } ||= bless \$entity, $class;
+		}
+		else {
+			return Class::Prototyped::Mirror::Normal->new($entity);
+		}
+	}
+
+	my $object;
+	unless ($object = $Class::Prototyped::Mirror::objects{ $entity }) {
+		my (%self);
+		my $tiepkg;
+		if ($entity eq 'Class::Prototyped') {
+			$tiepkg = 'Class::Prototyped::Tied::Default';
+		}
+		else {
+			no strict 'refs';
+			$tiepkg = eval { ${"$entity\::ISA"}[0]->reflect->tiedInterfacePackage() };
+			$tiepkg = Class::Prototyped->reflect->tiedInterfacePackage() if $@;
+		}
+		tie %self, $tiepkg;
+		$object = $Class::Prototyped::Mirror::objects{ $entity } = \%self;
+		tied(%self)->package($entity);
+
+		my $defaults;
+		if ($entity eq 'Class::Prototyped') {
+			$defaults = {FIELD => undef, METHOD => undef, PARENT => undef};
+		}
+		else {
+			no strict 'refs';
+			$defaults = eval { ${"$entity\::ISA"}[0]->reflect->_defaults() };
+			$defaults = Class::Prototyped->reflect->_defaults() if $@;
+		}
+
+		tied(%self)->{defaults} = $defaults;
+
+		bless $object, $entity;
+	}
+	return $Class::Prototyped::Mirror::mirrors{ $entity } ||= bless \$object, $class;
+}
+
+package Class::Prototyped::Mirror::Normal;
+
+@Class::Prototyped::Mirror::Normal::ISA = qw(Class::Prototyped::Mirror);
 
 sub new {
-  my $object;
-  if ( ref( $_[1] ) ) {
-    $object = $_[1];
-  }
-  else {
-    no strict 'refs';
+	my $class = shift;
+	my($entity) = @_;
 
-    unless ( $object = $Class::Prototyped::Mirror::objects{ $_[1] } ) {
-      my (%self);
-      tie %self, &Class::Prototyped::Mirror::DEFAULT_TIED_INTERFACE();
-      $object = $Class::Prototyped::Mirror::objects{ $_[1] } = \%self;
-      tied(%self)->package( $_[1] );
-      bless $object, $_[1];
-    }
-  }
-  bless \$object, $_[0];
+	my $temp = $class->SUPER::new(ref($entity));
+	my $self = bless \${ $temp }, $class;
+	$Class::Prototyped::Mirror::Normal::superselfs->{$self} = $entity;
+	return $self;
 }
+
+sub super {
+	my $mirror = shift;
+	(bless \$Class::Prototyped::Mirror::Normal::superselfs->{$mirror}, 'Class::Prototyped::Mirror')->super(@_);
+}
+
+sub DESTROY {
+	delete $Class::Prototyped::Mirror::Normal::superselfs->{$_[0]};
+}
+
+package Class::Prototyped::Mirror;
 
 #### Interface to tied object
 
 sub autoloadCall {
-  my $mirror  = shift;
-  my $package = $mirror;
-  no strict 'refs';
-  my $call = ${"$package\::AUTOLOAD"};
-  $call =~ s/.*:://;
-  return $call;
+	my $mirror  = shift;
+	my $package = $mirror;
+	no strict 'refs';
+	my $call = ${"$package\::AUTOLOAD"};
+	$call =~ s/.*:://;
+	return $call;
 }
 
 sub package {
-  ref( ${ $_[0] } );
+	ref(${ $_[0] });
+}
+
+sub tiedInterfacePackage {
+	my $self = shift;
+
+	if ($_[0]) {
+		my $package = {
+			'default'    => 'Class::Prototyped::Tied::Default',
+			'autovivify' => 'Class::Prototyped::Tied::AutoVivify',
+		}->{$_[0]} || $_[0];
+
+		if ($package eq $_[0] && scalar(keys %{"$package\::"}) == 0) {
+			eval "use $package";
+			Carp::croak "attempt to import package for :TIED_INTERFACE failed:\n$package"
+				if $@;
+		}
+
+		tie %{ ${ $self } }, $package, tied(%{ ${ $self } });
+		return $package;
+	}
+	else {
+		return ref(tied(%{ ${ $self } }));
+	}
+}
+
+sub defaultAttributes {
+	my $mirror = shift;
+
+	tied(%{ ${ $mirror } })->{defaults} = $_[0] if scalar(@_);
+	my $defaults = $mirror->_defaults;
+
+	my $retval = {};
+	$retval->{FIELD}  = defined $defaults->{FIELD} ? {%{$defaults->{FIELD}}} : undef;
+	$retval->{METHOD} = defined $defaults->{METHOD} ? {%{$defaults->{METHOD}}} : undef;
+	$retval->{PARENT} = defined $defaults->{PARENT} ? {%{$defaults->{PARENT}}} : undef;
+	return $retval;
 }
 
 sub _isa {
-  tied( %{ ${ $_[0] } } )->isa;
+	tied(%{ ${ $_[0] } })->isa;
 }
 
 sub _parentOrder {
-  my $tied = tied( %{ ${ $_[0] } } );
-  $_[0]->_autovivify_parents unless $tied->vivified_parents;
-  $tied->parentOrder;
+	my $tied = tied(%{ ${ $_[0] } });
+	$_[0]->_autovivify_parents unless $tied->{vivified_parents};
+	$tied->{parentOrder};
 }
 
 sub _otherOrder {
-  my $tied = tied( %{ ${ $_[0] } } );
-  $_[0]->_autovivify_parents unless $tied->vivified_methods;
-  $tied->otherOrder;
+	my $tied = tied(%{ ${ $_[0] } });
+	$_[0]->_autovivify_methods unless $tied->{vivified_methods};
+	$tied->{otherOrder};
 }
 
 sub _slotOrder {
-  my $tied = tied( %{ ${ $_[0] } } );
-  $_[0]->_autovivify_parents unless $tied->vivified_parents;
-  $_[0]->_autovivify_methods unless $tied->vivified_methods;
-  $tied->slotOrder;
+	my $tied = tied(%{ ${ $_[0] } });
+	$_[0]->_autovivify_parents unless $tied->{vivified_parents};
+	$_[0]->_autovivify_methods unless $tied->{vivified_methods};
+	[@{ $tied->{parentOrder} }, @{ $tied->{otherOrder} }];
 }
 
 sub _slots {
-  my $tied = tied( %{ ${ $_[0] } } );
-  $_[0]->_autovivify_parents unless $tied->vivified_parents;
-  $_[0]->_autovivify_methods unless $tied->vivified_methods;
-  $tied->slots;
+	my $tied = tied(%{ ${ $_[0] } });
+	$_[0]->_autovivify_parents unless $tied->{vivified_parents};
+	$_[0]->_autovivify_methods unless $tied->{vivified_methods};
+	$tied->{slots};
+}
+
+sub _types {
+	tied(%{ ${ $_[0] } })->{types};
+}
+
+sub _attribs {
+	tied(%{ ${ $_[0] } })->{attribs};
+}
+
+sub _defaults {
+	tied(%{ ${ $_[0] } })->{defaults};
 }
 
 sub _vivified_parents {
-  @_ > 1 ? tied( %{ ${ $_[0] } } )->vivified_parents( $_[1] ) :
-    tied( %{ ${ $_[0] } } )->vivified_parents;
+	@_ > 1 ? tied(%{ ${ $_[0] } })->{vivified_parents} = $_[1] :
+		tied(%{ ${ $_[0] } })->{vivified_parents};
 }
 
 sub _vivified_methods {
-  @_ > 1 ? tied( %{ ${ $_[0] } } )->vivified_methods( $_[1] ) :
-    tied( %{ ${ $_[0] } } )->vivified_methods;
+	@_ > 1 ? tied(%{ ${ $_[0] } })->{vivified_methods} = $_[1] :
+		tied(%{ ${ $_[0] } })->{vivified_methods};
+}
+
+#The following returns package, _isa, _parentOrder, _otherOrder,
+#_slots, _types, _attribs, and _defaults;
+sub _everything {
+	my $tied = tied(%{ ${ $_[0] } });
+	$_[0]->_autovivify_parents unless $tied->{vivified_parents};
+	$_[0]->_autovivify_methods unless $tied->{vivified_methods};
+
+	return (
+		ref(${ $_[0] }),
+		$tied->{isa},
+		$tied->{parentOrder},
+		$tied->{otherOrder},
+		$tied->{slots},
+		$tied->{types},
+		$tied->{attribs},
+		$tied->{defaults},
+	);
 }
 
 #### Autovivifivation support
 
 sub _autovivify_parents {
-  return if $_[0]->_vivified_parents;
+	my $tied = tied(%{ ${ $_[0] } });
+	return if $tied->{vivified_parents};
 
-  my $mirror = shift;
-  $mirror->_vivified_parents(1);
-  my $package     = $mirror->package;
-  my $parentOrder = $mirror->_parentOrder;
-  my $isa         = $mirror->_isa;
-  my $slots       = $mirror->_slots;
+	my $mirror = shift;
+	$tied->{vivified_parents} = 1;
 
-  if ( scalar( grep { UNIVERSAL::isa( $_, 'Class::Prototyped' ) } @$isa )
-    && $isa->[-1] ne 'Class::Prototyped' )
-  {
-    push ( @$isa, 'Class::Prototyped' );
-    no strict 'refs';
-    delete ${"$package\::"}{'::ISA::CACHE::'};  # re-cache @ISA
-  }
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
 
-  if ( @{$parentOrder} ) {
-    Carp::croak( "attempt to autovivify in the "
-      . "presence of an existing parentOrder\n" . "package: $package" );
-  }
-  my @isa = @$isa;
-  pop (@isa) if scalar(@isa) && $isa[-1] eq 'Class::Prototyped';
+	if (scalar(grep { UNIVERSAL::isa($_, 'Class::Prototyped') } @$isa)
+		&& $isa->[-1] ne 'Class::Prototyped')
+	{
+		push (@$isa, 'Class::Prototyped');
+		no strict 'refs';
+		delete ${"$package\::"}{'::ISA::CACHE::'};    # re-cache @ISA
+	}
 
-  foreach my $parentPackage (@isa) {
-    my $count = '';
-    my $slot  = "$parentPackage$count*";
-    while ( exists $slots->{$slot} || $slot eq 'self*' ) {
-      $slot = $parentPackage . ( ++$count ) . '*';
-    }
-    push ( @$parentOrder, $slot );
-    $slots->{$slot} = $parentPackage;
-  }
+	if (@{$parentOrder}) {
+		Carp::croak("attempt to autovivify in the "
+				. "presence of an existing parentOrder\n" . "package: $package");
+	}
+	my @isa = @$isa;
+	pop (@isa) if scalar(@isa) && $isa[-1] eq 'Class::Prototyped';
+
+	foreach my $parentPackage (@isa) {
+		my $count = '';
+		my $slot  = "$parentPackage$count*";
+		while (exists $slots->{$slot} || $slot eq 'self*') {
+			$slot = $parentPackage . (++$count) . '*';
+		}
+		push (@$parentOrder, $slot);
+		$slots->{$slot} = $parentPackage;
+		$types->{$slot} = 'PARENT';
+	}
 }
 
 sub _autovivify_methods {
-  return if $_[0]->_vivified_methods;
+	my $tied = tied(%{ ${ $_[0] } });
+	return if $tied->{vivified_methods};
 
-  my $mirror = shift;
-  $mirror->_vivified_methods(1);
-  my $package    = $mirror->package;
-  my $otherOrder = $mirror->_otherOrder;
-  my $slots      = $mirror->_slots;
+	my $mirror = shift;
+	$tied->{vivified_methods} = 1;
 
-  no strict 'refs';
-  foreach my $slot ( grep { $_ ne 'DESTROY' } keys %{"$package\::"} ) {
-    my $code = *{"$package\::$slot"}{CODE} or next;
-    ref($code) ne 'Class::Prototyped::FieldAccessor' or next;
-    Carp::croak("the slot self* is inviolable") if $slot eq 'self*';
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
 
-    if ( exists $slots->{$slot} ) {
-      Carp::croak("you overwrote a slot via an include $slot")
-        if !UNIVERSAL::isa( $slots->{$slot}, 'CODE' )
-        || $slots->{$slot} != $code;
-    }
-    else {
-      push ( @$otherOrder, $slot );
-      $slots->{$slot} = $code;
-    }
-  }
+	no strict 'refs';
+	foreach my $slot (grep { $_ ne 'DESTROY' } keys %{"$package\::"}) {
+		my $code = *{"$package\::$slot"}{CODE} or next;
+		ref($code) =~ /^Class::Prototyped::FieldAccessor/ and next;
+		Carp::croak("the slot self* is inviolable") if $slot eq 'self*';
+
+		if (exists $slots->{$slot}) {
+			Carp::croak("you overwrote a slot via an include $slot")
+				if !UNIVERSAL::isa($slots->{$slot}, 'CODE')
+				|| $slots->{$slot} != $code;
+		}
+		else {
+			push (@$otherOrder, $slot);
+			$slots->{$slot} = $code;
+			$types->{$slot} = 'METHOD';
+		}
+	}
 }
 
 sub object {
-  $_[0]->_autovivify_parents;
-  $_[0]->_autovivify_methods;
-  ${ $_[0] };
+	$_[0]->_autovivify_parents;
+	$_[0]->_autovivify_methods;
+	${ $_[0] };
 }
 
 sub class {
-  return $_[0]->_slots->{'class*'};
+	return $_[0]->_slots->{'class*'};
 }
 
 sub dump {
-  eval "package main; use Data::Dumper;"
-    unless ( scalar keys(%Data::Dumper::) );
+	eval "package main; use Data::Dumper;"
+		unless (scalar keys(%Data::Dumper::));
 
-  Data::Dumper->Dump( [ $_[0]->object ], [ $_[0]->package ] );
+	Data::Dumper->Dump([ $_[0]->object ], [ $_[0]->package ]);
+}
+
+
+sub slotStruct_name () {0};
+sub slotStruct_value () {1};
+sub slotStruct_type () {2};
+sub slotStruct_attribs () {3};
+sub slotStruct_implementor () {4};
+sub slotStruct_filters () {5};
+sub slotStruct_advisories () {6};
+
+
+#### The support for attribute rationalization is not very fancy
+$Class::Prototyped::Mirror::attributes = {
+	FIELD => {
+		constant => {
+			type => 'implementor',
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				$slotAttribs->{constant} = 1;
+				return bless sub {
+					$slots->{$slotName};
+				}, 'Class::Prototyped::FieldAccessor::Constant';
+			}
+		},
+
+		autoload => {
+			type => 'filter',
+			rank => 50,
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				if ($slotAttribs->{autoload} = $slotAttribs->{autoload} ? 1 : undef) {
+					my $self = $mirror->object;
+					$implementation = bless sub {
+						my $retval = &$slotValue;
+						my $attribs = $self->reflect->_attribs->{$slotName};
+						delete($attribs->{autoload});
+						$self->reflect->addSlot([$slotName, %$attribs] => $retval);
+						return $retval;
+					}, 'Class::Prototyped::FieldAccessor::Autoload';
+				}
+				return $implementation;
+			}
+		},
+
+		profile => {
+			type => 'filter',
+			rank => 80,
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				if ($slotAttribs->{profile}) {
+					package Class::Prototyped::Mirror::PROFILE;
+					my $old_implementation = $implementation;
+					my $package = ref( ${ $mirror } );
+					$implementation = sub {
+						$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
+						&$old_implementation;
+					};
+				}
+				return $implementation;
+			},
+		},
+
+		'wantarray' => {
+			type => 'filter',
+			rank => 90,
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				if ($slotAttribs->{'wantarray'} = $slotAttribs->{'wantarray'} ? 1 : undef) {
+					my $old_implementation = $implementation;
+					$implementation = bless sub {
+						my $retval = &$old_implementation;
+						if (ref($retval) eq 'ARRAY' && wantarray) {
+							return (@$retval);
+						}
+						else {
+							return $retval;
+						}
+					}, 'Class::Prototyped::FieldAccessor::Wantarray';
+				}
+				return $implementation;
+			}
+		},
+
+		description => {
+			type => 'advisory',
+		},
+	},
+
+	METHOD => {
+		superable => {
+			type => 'filter',
+			rank => 10,
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				if ($slotAttribs->{superable} = $slotAttribs->{superable} ? 1 : undef) {
+					package Class::Prototyped::Mirror::SUPER;
+					my $old_implementation = $implementation;
+					my $package = ref( ${ $mirror } );
+					$implementation = sub {
+						local $Class::Prototyped::Mirror::SUPER::package =
+							$package;
+						&$old_implementation;
+					};
+					package Class::Prototyped::Mirror;
+				}
+				return $implementation;
+			}
+		},
+
+		profile => {
+			type => 'filter',
+			rank => 90,
+			code => sub {
+				my($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots) = @_;
+
+				if ($slotAttribs->{profile}) {
+					package Class::Prototyped::Mirror::PROFILE;
+					my $old_implementation = $implementation;
+					my $package = ref( ${ $mirror } );
+					$implementation = sub {
+						$Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName}++;
+						&$old_implementation;
+					};
+				}
+				return $implementation;
+			},
+		},
+
+		overload => {
+			type => 'advisory',
+		},
+
+		description => {
+			type => 'advisory',
+		},
+	},
+
+	PARENT => {
+		description => {
+			type => 'advisory',
+		},
+
+		promote => {
+			type => 'advisory',
+		},
+	},
+};
+
+sub addSlotsParser {
+	my $mirror = shift;
+
+	Carp::croak("odd number of arguments to addSlotsParser\n")
+		if scalar(@_) % 2;
+
+	my($package, undef, undef, undef, $slots, undef, undef, $defaults) =
+		$mirror->_everything();
+
+	my(@retvals);
+
+	while (my($slotThing, $slotValue) = splice(@_, 0, 2)) {
+		my($slotName, $slotType, $slotAttribs, $slotImplementor, $slotFilters, $slotAdvisories);
+		my $isCode = UNIVERSAL::isa($slotValue, 'CODE');
+
+		if (ref($slotThing) eq 'ARRAY') {
+			$slotName = $slotThing->[0];
+
+			my $temp = $slotThing->[1] || '';
+			if ($temp eq 'METHOD' || $temp eq 'FIELD' || $temp eq 'PARENT') {
+				$slotType = $temp;
+				$temp = 2;
+			}
+			else {
+				$slotType = $isCode ? 'METHOD' :
+					(substr($slotName, -1) eq '*' ? 'PARENT' : 'FIELD');
+				$temp = 1;
+			}
+
+			if ($#{$slotThing} >= $temp) {
+				if ($#{$slotThing} == $temp) {
+					$slotAttribs = defined $defaults->{$slotType}
+							? { %{$defaults->{$slotType}}, $slotThing->[$temp] => 1 }
+							: { $slotThing->[$temp] => 1 };
+				}
+				else {
+					$slotAttribs = defined $defaults->{$slotType}
+							? { %{$defaults->{$slotType}}, @{$slotThing}[$temp..$#{$slotThing}] }
+							: { @{$slotThing}[$temp..$#{$slotThing}] };
+				}
+			}
+			elsif (defined $defaults->{$slotType}) {
+				$slotAttribs = { %{$defaults->{$slotType}} };
+			}
+
+			if ($slotType eq 'METHOD') {
+				Carp::croak("it is not permitted to use '!' notation in conjunction with slot attributes")
+					if substr($slotName, -1) eq '!';
+
+				Carp::croak("method slots have to have CODE refs as values")
+					if !$isCode;
+			}
+			elsif ($slotType eq 'PARENT') {
+				Carp::croak("it is not permitted to use '**' notation in conjunction with slot attributes")
+					if substr($slotName, -2, 1) eq '*';
+			}
+		}
+		else {
+			$slotName = $slotThing;
+			$slotType = $isCode ? 'METHOD' :
+				(substr($slotName, -1) eq '*' ? 'PARENT' : 'FIELD');
+
+			if (defined $defaults->{$slotType}) {
+				$slotAttribs = { %{$defaults->{$slotType}} };
+			}
+
+			# Slots that end in '!' mean that the method is superable
+			if ($slotType eq 'METHOD' && substr($slotName, -1) eq '!') {
+				$slotName = substr($slotName, 0, -1);
+				$slotAttribs->{superable} = 1;
+			}
+
+			# Temporary support for &
+			if ($slotType eq 'FIELD' && substr($slotName, -1) eq '&') {
+				$slotName = substr($slotName, 0, -1);
+				$slotAttribs->{constant} = 1;
+			}
+
+			# Slots that end in '**' mean to push the slot
+			# to the front of the parents list.
+			if ($slotType eq 'PARENT' && substr($slotName, -2) eq '**') {
+				$slotName = substr($slotName, 0, -1);    # xyz** => xyz*
+				$slotAttribs->{promote} = 1;
+			}
+		}
+
+		if ($slotType eq 'METHOD' && exists($Class::Prototyped::overloadable_symbols{$slotName})) {
+			$slotAttribs->{overload} = 1;
+		}
+		else {
+			Carp::croak("can't use slot attribute overload for slots that aren't overloadable")
+				if ($slotAttribs->{overload} && !exists($Class::Prototyped::overloadable_symbols{$slotName}));
+		}
+
+		Carp::croak("slots should end in * if and only if the type is parent")
+			if ( (substr($slotName, -1) eq '*') != ($slotType eq 'PARENT') && !$slotAttribs->{overload} );
+
+		if ($slotName eq '*') {
+			$slotName = (ref($slotValue) || $slotValue) . $slotName;
+		}
+
+		if(scalar(keys(%{$slotAttribs}))) {
+			my $attributes = $Class::Prototyped::Mirror::attributes->{$slotType};
+
+			foreach my $attrib (keys %{$slotAttribs}) {
+				Carp::croak("$slotType slots cannot have the '$attrib' attribute.")
+					unless exists $attributes->{$attrib};
+
+				my $atype = $attributes->{$attrib}->{type};
+				if ($atype eq 'filter') {
+					push(@{$slotFilters}, $attrib);
+				}
+				elsif ($atype eq 'advisory') {
+					push(@{$slotAdvisories}, $attrib);
+				}
+				elsif ($atype eq 'implementor') {
+					Carp::croak("slots cannot have more than one implementor.")
+						if defined($slotImplementor);
+					$slotImplementor = $attributes->{$attrib}->{code} if $slotAttribs->{$attrib};
+				}
+				else {
+					Carp::croak("unknown attribute type '$atype' for '$attrib'.");
+				}
+			}
+
+			if (defined $slotFilters) {
+				@{$slotFilters} = map { $attributes->{$_}->{code} } sort {
+						$attributes->{$a}->{rank} <=> $attributes->{$b}->{rank} || $a cmp $b
+					} @{$slotFilters};
+			}
+
+			if (defined $slotAdvisories) {
+				@{$slotAdvisories} = grep {defined} map { $attributes->{$_}->{code} } sort @{ $slotAdvisories };
+			}
+		}
+
+		Carp::croak("the slot self* is inviolable") if $slotName eq 'self*';
+
+		Carp::croak("Can only use operator names for method slots\nslot: $slotName")
+			if ( exists($Class::Prototyped::overloadable_symbols{$slotName}) &&
+						$slotType ne 'METHOD' );
+
+		if ($slotType eq 'PARENT') {
+			Carp::croak("parent slots cannot be code blocks") if ($isCode);
+
+			unless (UNIVERSAL::isa($slotValue, 'Class::Prototyped')
+				|| (ref(\$slotValue) eq 'SCALAR' && defined $slotValue))
+			{
+				Carp::croak("attempt to add parent that isn't a "
+						. "Class::Prototyped or package name\n"
+						. "package: $package slot: $slotName parent: $slotValue");
+			}
+
+			if (UNIVERSAL::isa($slotValue, $package)) {
+				Carp::croak("attempt at recursive inheritance\n"
+						. "parent $slotValue is a package $package");
+			}
+		}
+		elsif ($slotType eq 'METHOD') {
+			Carp::croak("cannot replace DESTROY method for unnamed objects")
+				if ($slotName eq 'DESTROY' && substr($package, 0, PREFIX_LENGTH) eq PREFIX);
+		}
+
+		push(@retvals, [$slotName, $slotValue, $slotType, $slotAttribs, $slotImplementor, $slotFilters, $slotAdvisories]);
+	}
+	return \@retvals;
+}
+
+sub addParsedSlots {
+	my $mirror = shift;
+
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything();
+
+	while (@{$_[0]}) {
+		my($slotName, $slotValue, $slotType, $slotAttribs, $slotImplementor, $slotFilters, $slotAdvisories) = @{ shift @{$_[0]} };
+
+		&deleteSlots($mirror, $slotName) if exists($slots->{$slotName});
+
+		$slots->{$slotName} = $slotValue;    #everything goes into the slots!!!!!
+
+		if ($slotType eq 'PARENT') {
+			my $parentPackage = ref($slotValue) || $slotValue;
+
+			if (substr($parentPackage, 0, PREFIX_LENGTH) eq PREFIX) {
+				$Class::Prototyped::Mirror::parents{$package}->{$slotName} = $slotValue;
+			}
+			else {
+				Carp::carp(
+"it is recommended to use ->reflect->include for mixing in named files."
+					)
+					if $parentPackage =~ /\.p[lm]$/i;
+
+				no strict 'refs';
+				if (!ref($slotValue)
+					&& !(scalar keys(%{"$parentPackage\::"})))
+				{
+					$mirror->include($parentPackage);
+				}
+			}
+
+			my $splice_point = $slotAttribs->{promote} ? 0 : @$parentOrder;
+			delete $slotAttribs->{promote};
+			splice(@$isa, $splice_point, 0, $parentPackage);
+			{
+				#Defends against ISA caching problems
+				no strict 'refs';
+				delete ${"$package\::"}{'::ISA::CACHE::'};
+			}
+			splice(@$parentOrder, $splice_point, 0, $slotName);
+		}
+		else {
+			my $implementation = defined $slotImplementor
+				? $slotImplementor->($mirror, $slotName, $slotValue, $slotAttribs, undef, $slots)
+				: ( $slotType eq 'METHOD' 
+						? $slotValue
+						: bless sub {
+								@_ > 1 ? $slots->{$slotName} = $_[1] : $slots->{$slotName};
+							}, 'Class::Prototyped::FieldAccessor'
+					);
+
+			if (defined $slotFilters) {
+				foreach my $filter (@{ $slotFilters }) {
+					$implementation =	$filter->($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots);
+				}
+			}
+
+			if (defined $slotAdvisories) {
+				foreach my $advisory (@{ $slotAdvisories }) {
+					$advisory->($mirror, $slotName, $slotValue, $slotAttribs, $implementation, $slots);
+				}
+			}
+
+			if ($slotAttribs->{overload}) {
+				eval "package $package;
+					use overload '$slotName' => \$implementation, fallback => 1;
+							bless \$object, \$package;";
+				Carp::croak("Eval failed while defining overload\n"
+						. "operation: \"$slotName\" error: $@")
+					if $@;
+			}
+			else {
+				no strict 'refs';
+				local $^W = 0;    # suppress redefining messages.
+				*{"$package\::$slotName"} = $implementation;
+			}
+			push (@$otherOrder, $slotName);
+		}
+		$attribs->{$slotName} = $slotAttribs;
+		$types->{$slotName} = $slotType;
+	}
+
+	return $mirror;
 }
 
 sub addSlots {
-  my $mirror = shift;
-  my (@addSlots) = @_;
-
-  Carp::croak("odd number of arguments to addSlots\n")
-    if scalar(@addSlots) % 2;
-
-  my $package     = $mirror->package;
-  my $slots       = $mirror->_slots;
-  my $parentOrder = $mirror->_parentOrder;
-  my $otherOrder  = $mirror->_otherOrder;
-
-  while ( my ( $slot, $value ) = splice( @addSlots, 0, 2 ) ) {
-    my $parent_header    = 0;
-    my $superable_method = 0;
-
-    my $isCode = UNIVERSAL::isa( $value, 'CODE' );
-
-    if ($isCode) {
-
-      # Slots that end in '!' mean that the method is superable
-      if ( substr( $slot, -1 ) eq '!' ) {
-        $slot = substr( $slot, 0, -1 );
-        $superable_method = 1;
-      }
-    }
-    else {
-
-      # Slots that end in '**' mean to push the slot
-      # to the front of the parents list.
-      if ( substr( $slot, -2 ) eq '**' ) {
-        $slot = substr( $slot, 0, -1 );    # xyz** => xyz*
-        $parent_header = 1;
-      }
-
-      # Slots that are named just '*' or '**' get their names from
-      # their package name.
-      if ( $slot eq '*' ) {
-        $slot = ( ref($value) || $value ) . $slot;
-      }
-
-      Carp::croak("the slot self* is inviolable") if $slot eq 'self*';
-    }
-
-    if ( $slot eq 'DESTROY'
-      && substr( $package, 0, PREFIX_LENGTH ) eq PREFIX )
-    {
-      Carp::croak("cannot replace DESTROY method for unnamed objects");
-    }
-
-    $mirror->deleteSlots($slot) if exists( $slots->{$slot} );
-
-    $slots->{$slot} = $value;    #everything goes into the slots!!!!!
-
-    if ( !$isCode && substr( $slot, -1 ) eq '*' ) {    # parent slot?
-      unless ( UNIVERSAL::isa( $value, 'Class::Prototyped' )
-        || ( ref( \$value ) eq 'SCALAR' && defined $value ) )
-      {
-        Carp::croak( "attempt to add parent that isn't a "
-          . "Class::Prototyped or package name\n"
-          . "package: $package slot: $slot parent: $value" );
-      }
-
-      if ( UNIVERSAL::isa( $value, $package ) ) {
-        Carp::croak( "attempt at recursive inheritance\n"
-          . "parent $value is a package $package" );
-      }
-
-      my $parentPackage = ref($value) || $value;
-
-      if ( substr( $parentPackage, 0, PREFIX_LENGTH ) eq PREFIX ) {
-        $Class::Prototyped::Mirror::parents{$package}->{$slot} = $value;
-      }
-      else {
-        Carp::carp(
-"it is recommended to use ->reflect->include for mixing in named files."
-          )
-          if $parentPackage =~ /\.p[lm]$/i;
-
-        no strict 'refs';
-        if ( !ref($value)
-          && !( scalar keys( %{"$parentPackage\::"} ) ) )
-        {
-          $mirror->include($parentPackage);
-        }
-      }
-
-      my $isa         = $mirror->_isa;
-      my $splice_point = $parent_header ? 0 : @$parentOrder;
-      splice( @$isa, $splice_point, 0, $parentPackage );
-      {
-        #Defends against ISA caching problems
-        no strict 'refs';
-        delete ${"$package\::"}{'::ISA::CACHE::'};
-      }
-      splice( @$parentOrder, $splice_point, 0, $slot );
-    }
-    else {
-
-      if ( exists( $Class::Prototyped::overloadable_symbols{$slot} ) ) {
-        Carp::croak("Can't overload slot with non-CODE\nslot: $slot")
-          unless $isCode;
-        eval "package $package;
-          use overload '$slot' => \$value, fallback => 1;
-              bless \$object, \$package;";
-        Carp::croak( "Eval failed while defining overload\n"
-          . "operation: \"$slot\" error: $@" )
-          if $@;
-      }
-      else {
-        my $implementation;
-
-        if ($superable_method) {
-
-          package Class::Prototyped::Mirror::SUPER;
-          $implementation = sub {
-            local $Class::Prototyped::Mirror::SUPER::package =
-              $package;
-            shift->$value(@_);
-          };
-
-          package Class::Prototyped::Mirror;
-        }
-        elsif ($isCode) {
-          $implementation = $value;
-        }
-        else {
-          $implementation = bless sub {
-            @_ > 1 ? $slots->{$slot} = $_[1] : $slots->{$slot};
-          }, 'Class::Prototyped::FieldAccessor';
-        }
-        no strict 'refs';
-        local $^W = 0;    # suppress redefining messages.
-        *{"$package\::$slot"} = $implementation;
-      }
-      push ( @$otherOrder, $slot );
-    }
-  }
-
-  return $mirror;
+	my $mirror = shift;
+	$mirror->addParsedSlots( $mirror->addSlotsParser(@_) );
 }
 
-*addSlot = \&addSlots;    # alias addSlot to addSlots
+*addSlot = \&addSlots;            # alias addSlot to addSlots
 
 # $obj->reflect->deleteSlots( name [, name [...]] );
 sub deleteSlots {
-  my $mirror = shift;
-  my (@deleteSlots) = @_;
+	my $mirror = shift;
+	my (@deleteSlots) = @_;
 
-  my $package     = $mirror->package;
-  my $slots       = $mirror->_slots;
-  my $parentOrder = $mirror->_parentOrder;
-  my $otherOrder  = $mirror->_otherOrder;
-  my $isa         = $mirror->_isa;
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
 
-  foreach my $slot (@deleteSlots) {
-    $slot = substr( $slot, 0, -1 ) if substr( $slot, -2 ) eq '**';
-    $slot = substr( $slot, 0, -1 ) if substr( $slot, -1 ) eq '!';
+	foreach my $slot (@deleteSlots) {
+		$slot = substr($slot, 0, -1) if substr($slot, -2) eq '**';
+		$slot = substr($slot, 0, -1) if substr($slot, -1) eq '!';
 
-    next if !exists( $slots->{$slot} );
+		next if !exists($slots->{$slot});
 
-    my $value = $slots->{$slot};
+		my $value = $slots->{$slot};
 
-    if ( substr( $slot, -1 ) eq '*' ) {    # parent slot
-      my $index = 0;
-      1 while ( $parentOrder->[$index] ne $slot
-        and $index++ < @$parentOrder );
+		if (substr($slot, -1) eq '*') {    # parent slot
+			my $index = 0;
+			1 while ($parentOrder->[$index] ne $slot
+				and $index++ < @$parentOrder);
 
-      if ( $index < @$parentOrder ) {
-        splice( @$parentOrder, $index, 1 );
-        splice( @$isa, $index, 1 );
-        {
-          #Defends against ISA caching problems
-          no strict 'refs';
-          delete ${"$package\::"}{'::ISA::CACHE::'};
-        }
-      }
-      else {    # not found
+			if ($index < @$parentOrder) {
+				splice(@$parentOrder, $index, 1);
+				splice(@$isa,         $index, 1);
+				{
 
-        if ( !$Class::Prototyped::Mirror::ending ) {
-          Carp::cluck "couldn't find $slot in $package\n";
-          $DB::single = 1;
-        }
-      }
+					#Defends against ISA caching problems
+					no strict 'refs';
+					delete ${"$package\::"}{'::ISA::CACHE::'};
+				}
+			}
+			else {    # not found
 
-      if ( defined($value) ) {
-        my $parentPackage = ref($value);
-        if ( substr( $parentPackage, 0, PREFIX_LENGTH ) eq PREFIX ) {
-          delete
-            ( $Class::Prototyped::Mirror::parents{$package}->{$slot}
-          );
-        }
-      }
-      else {
+				if (!$Class::Prototyped::Mirror::ending) {
+					Carp::cluck "couldn't find $slot in $package\n";
+					$DB::single = 1;
+				}
+			}
 
-        if ( !$Class::Prototyped::Mirror::ending ) {
-          Carp::cluck "slot undef for $slot in $package\n";
-          $DB::single = 1;
-        }
-      }
-    }
-    else {
+			if (defined($value)) {
+				my $parentPackage = ref($value);
+				if (substr($parentPackage, 0, PREFIX_LENGTH) eq PREFIX) {
+					delete
+						($Class::Prototyped::Mirror::parents{$package}->{$slot}
+						);
+				}
+			}
+			else {
 
-      if ( exists( $Class::Prototyped::overloadable_symbols{$slot} ) ) {
-        Carp::croak(
-          "Perl segfaults when the last overload is removed. Boom!\n")
-          if ( 1 == grep {
-            exists( $Class::Prototyped::overloadable_symbols{$_} );
-        } keys(%$slots) );
+				if (!$Class::Prototyped::Mirror::ending) {
+					Carp::cluck "slot undef for $slot in $package\n";
+					$DB::single = 1;
+				}
+			}
+		}
+		else {
 
-        my $object = $mirror->object;
+			if (exists($Class::Prototyped::overloadable_symbols{$slot})) {
+				Carp::croak(
+					"Perl segfaults when the last overload is removed. Boom!\n")
+					if (1 == grep {
+						exists($Class::Prototyped::overloadable_symbols{$_});
+					} keys(%$slots));
 
-        eval "package $package;
-          no overload '$slot';
-              bless \$object, \$package;"
-          ;    # dummy bless so that overloading works.
-        Carp::croak( "Eval failed while removing overload\n"
-          . "operation: \"$slot\" error: $@" )
-          if $@;
-      }
-      else {    # we have a method by that name; delete it
-        no strict 'refs';
-        my $name = "$package\::$slot";
+				eval "package $package;
+					no overload '$slot';
+							bless {}, \$package;"
+					;    # dummy bless so that overloading works.
+				Carp::croak("Eval failed while removing overload\n"
+						. "operation: \"$slot\" error: $@")
+					if $@;
+			}
+			else {     # we have a method by that name; delete it
+				no strict 'refs';
+				my $name = "$package\::$slot";
 
-        # save the glob...
-        local *old = *{$name};
+				# save the glob...
+				local *old = *{$name};
 
-        # and restore everything else
-        local *new;
-        foreach my $type (qw(HASH IO FORMAT SCALAR ARRAY)) {
-          my $elem = *old{$type};
-          next if !defined($elem);
-          *new = $elem;
-        }
-        *{$name} = *new;
-      }
-      @$otherOrder = grep { $_ ne $slot } @$otherOrder;
-    }
-    delete $slots->{$slot};    # and delete the data/sub ref
-  }
+				# and restore everything else
+				local *new;
+				foreach my $type (qw(HASH IO FORMAT SCALAR ARRAY)) {
+					my $elem = *old{$type};
+					next if !defined($elem);
+					*new = $elem;
+				}
+				*{$name} = *new;
+			}
+			@$otherOrder = grep { $_ ne $slot } @$otherOrder;
+		}
+		delete $slots->{$slot};    # and delete the data/sub ref
+		delete $types->{$slot};
+		delete $attribs->{$slot};
+	}
 
-  return $mirror;
+	return $mirror;
 }
 
-*deleteSlot = \&deleteSlots;    # alias deleteSlot to deleteSlots
+*deleteSlot = \&deleteSlots;       # alias deleteSlot to deleteSlots
 
 sub super_slow {
-  return shift->super_fast(@_)
-    if ( ( caller(1) )[0] eq 'Class::Prototyped::Mirror::SUPER' );
-  return shift->super_fast(@_)
-    if ( ( caller(2) )[0] eq 'Class::Prototyped::Mirror::SUPER' );
-  Carp::croak(
-    "attempt to call super on a method that was defined without !\n"
-    . "method: " . $_[1] );
+	return shift->super_fast(@_)
+		if ((caller(1))[0] eq 'Class::Prototyped::Mirror::SUPER');
+	return shift->super_fast(@_)
+		if ((caller(2))[0] eq 'Class::Prototyped::Mirror::SUPER');
+	Carp::croak(
+		"attempt to call super on a method that was defined without !\n"
+			. "method: " . $_[1]);
 }
 
-*super = \&super_slow unless defined( *super{CODE} );
+*super = \&super_slow unless defined(*super{CODE});
 
 sub super_fast {
-  my $mirror  = shift;
-  my $message = shift;
+	my $mirror  = shift;
+	my $message = shift;
 
-  $message or Carp::croak("you have to pass the method name to super");
+	$message or Carp::croak("you have to pass the method name to super");
 
-  my $object = $mirror->object;
+	my $object = ${ $mirror };
 
-  my (@isa);
-  {
-    no strict 'refs';
-    @isa = @{ $Class::Prototyped::Mirror::SUPER::package . '::ISA' };
-  }
-  my $method;
+	my (@isa);
+	{
+		no strict 'refs';
+		@isa = @{ $Class::Prototyped::Mirror::SUPER::package . '::ISA' };
+	}
+	my $method;
 
-  foreach my $parentPackage (@isa) {
-    $method = UNIVERSAL::can( $parentPackage, $message );
-    last if $method;
-  }
-  $method
-    or Carp::croak("could not find super in parents\nmessage: $message");
-  $method->( $object, @_ );
+	foreach my $parentPackage (@isa) {
+		$method = UNIVERSAL::can($parentPackage, $message);
+		last if $method;
+	}
+	$method
+		or Carp::croak("could not find super in parents\nmessage: $message");
+	$method->($object, @_);
 }
 
 sub slotNames {
-  my $mirror = shift;
-  my $type   = shift;
+	my $mirror = shift;
+	my $type   = shift;
 
-  my @slotNames = @{ $mirror->_slotOrder };
-  if ($type) {
-    @slotNames = grep { $mirror->slotType($_) eq $type } @slotNames;
-  }
-  return wantarray ? @slotNames : \@slotNames;
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
+
+	my @slotNames = (@$parentOrder, @$otherOrder);
+	if ($type) {
+		@slotNames = grep { $types->{$_} eq $type } @slotNames;
+	}
+	return wantarray ? @slotNames : \@slotNames;
 }
 
 sub slotType {
-  my $mirror   = shift;
-  my $slotName = shift;
+	my $mirror   = shift;
+	my $slotName = shift;
 
-  my $slots = $mirror->_slots;
-  Carp::croak(
-    "attempt to determine slotType for unknown slot\nslot: $slotName")
-    unless exists $slots->{$slotName};
-  return 'PARENT' if substr( $slotName, -1 ) eq '*';
-  return 'METHOD' if UNIVERSAL::isa( $slots->{$slotName}, 'CODE' );
-  return 'FIELD';
+	my $types = $mirror->_types;
+	Carp::croak(
+		"attempt to determine slotType for unknown slot\nslot: $slotName")
+		unless exists $types->{$slotName};
+	return $types->{$slotName};
 }
 
 # may return dups
 sub allSlotNames {
-  my $mirror = shift;
-  my $type   = shift;
+	my $mirror = shift;
+	my $type   = shift;
 
-  my @slotNames;
-  foreach my $parent ( $mirror->withAllParents() ) {
-    my $mirror = Class::Prototyped::Mirror->new($parent);
-    push ( @slotNames, $mirror->slotNames($type) );
-  }
-  return wantarray ? @slotNames : \@slotNames;
+	my @slotNames;
+	foreach my $parent ($mirror->withAllParents()) {
+		my $mirror = Class::Prototyped::Mirror->new($parent);
+		push (@slotNames, $mirror->slotNames($type));
+	}
+	return wantarray ? @slotNames : \@slotNames;
 }
 
 sub parents {
-  my $mirror = shift;
+	my $mirror = shift;
 
-  my $object = $mirror->object;
-  my $slots  = $mirror->_slots;
-  return map { $slots->{$_} } $mirror->slotNames('PARENT');
+	my $object = $mirror->object;
+	my $slots  = $mirror->_slots;
+	return map { $slots->{$_} } $mirror->slotNames('PARENT');
 }
 
 sub allParents {
-  my $mirror = shift;
-  my $retval = shift || [];
-  my $seen   = shift || {};
+	my $mirror = shift;
+	my $retval = shift || [];
+	my $seen   = shift || {};
 
-  foreach my $parent ( $mirror->parents ) {
-    next if $seen->{$parent}++;
-    push @$retval, $parent;
-    my $mirror = Class::Prototyped::Mirror->new($parent);
-    $mirror->allParents( $retval, $seen );
-  }
-  return wantarray ? @$retval : $retval;
+	foreach my $parent ($mirror->parents) {
+		next if $seen->{$parent}++;
+		push @$retval, $parent;
+		my $mirror = Class::Prototyped::Mirror->new($parent);
+		$mirror->allParents($retval, $seen);
+	}
+	return wantarray ? @$retval : $retval;
 }
 
 sub withAllParents {
-  my $mirror = shift;
+	my $mirror = shift;
 
-  my $object = $mirror->object;
-  my $retval = [$object];
-  my $seen   = { $object => 1 };
-  $mirror->allParents( $retval, $seen );
+	my $object = $mirror->object;
+	my $retval = [$object];
+	my $seen   = { $object => 1 };
+	$mirror->allParents($retval, $seen);
 }
 
 # getSlot returns both the slotName and the slot in array context
@@ -958,147 +1335,174 @@ sub withAllParents {
 # However, in scalar context, it just returns the value.
 
 sub getSlot {
-  my $mirror   = shift;
-  my $slotName = shift;
+	my $mirror   = shift;
+	my $slot = shift;
+	my $format = shift;
 
-  my $value =
-    ( $slotName ne 'self*' ) ? $mirror->_slots->{$slotName} : $mirror->object;
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
 
-  if ( defined($value) and UNIVERSAL::isa( $value, 'CODE' ) ) {
-    no strict 'refs';
-    $slotName .= '!' if \&{ $mirror->package . "::$slotName" } != $value;
-  }
-  return wantarray ? ( $slotName, $value ) : $value;
+	my $value = ($slot ne 'self*') ? $slots->{$slot} : $mirror->object;
+
+	return $value unless wantarray;
+
+	$slot = [$slot, $types->{$slot}, %{$attribs->{$slot} || {}}];
+
+	if (!defined $format || $format eq 'default') {
+		return ($slot, $value);
+	}
+	elsif ($format eq 'simple') {
+		return ($slot->[0], $value);
+	}
+	elsif ($format eq 'rotated') {
+		return ($slot->[0], {
+				attribs => { @{$slot}[2..$#{$slot}] },
+				type => $slot->[1], 
+				value => $value
+			}
+		);
+	}
 }
 
 sub getSlots {
-  my $mirror = shift;
-  my $type   = shift;
+	my $mirror = shift;
+	my $type   = shift;
+	my $format = shift;
 
-  my @retval = map { $mirror->getSlot($_) } $mirror->slotNames($type);
-  return wantarray ? @retval : \@retval;
+	my @retval;
+	if (defined $type || defined $format) {
+		@retval = map { $mirror->getSlot($_, $format) } $mirror->slotNames($type);
+	}
+	else {
+		my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+			$mirror->_everything;
+		@retval = map {
+			([$_, $types->{$_}, %{$attribs->{$_} || {}}] => $slots->{$_})
+		} (@$parentOrder, @$otherOrder);
+	}
+
+	return wantarray ? @retval : \@retval;
 }
 
 sub promoteParents {
-  my $mirror = shift;
-  my (@newOrder) = @_;
+	my $mirror = shift;
+	my (@newOrder) = @_;
 
-  my $parentOrder = $mirror->_parentOrder;
-  my $slots       = $mirror->_slots;
+	my($package, $isa, $parentOrder, $otherOrder, $slots, $types, $attribs, undef) =
+		$mirror->_everything;
 
-  my %seen;
-  foreach my $slot (@newOrder) {
-    $seen{$slot}++;
-    if ( $seen{$slot} > 1 || !exists( $slots->{$slot} ) ) {
-      Carp::croak("promoteParents called with bad order list\nlist: @_");
-    }
-    else {
-      @{$parentOrder} = grep { $_ ne $slot } @{$parentOrder};
-    }
-  }
+	my %seen;
+	foreach my $slot (@newOrder) {
+		$seen{$slot}++;
+		if ($seen{$slot} > 1 || !exists($slots->{$slot})) {
+			Carp::croak("promoteParents called with bad order list\nlist: @_");
+		}
+		else {
+			@{$parentOrder} = grep { $_ ne $slot } @{$parentOrder};
+		}
+	}
 
-  @{$parentOrder} = ( @newOrder, @{$parentOrder} );
+	@{$parentOrder} = (@newOrder, @{$parentOrder});
 
-  my $isa = $mirror->_isa;
-  @$isa =
-    ( ( map { ref( $slots->{$_} ) ? ref( $slots->{$_} ) : $slots->{$_} }
-    @{$parentOrder} ), 'Class::Prototype' );
+	@$isa =
+		((map { ref($slots->{$_}) ? ref($slots->{$_}) : $slots->{$_} }
+				@{$parentOrder}), 'Class::Prototype');
 
-  # this is required to re-cache @ISA
-  my $package     = $mirror->package;
-  no strict 'refs';
-  delete ${"$package\::"}{'::ISA::CACHE::'};
+	# this is required to re-cache @ISA
+#	my $package = $mirror->package;
+	no strict 'refs';
+	delete ${"$package\::"}{'::ISA::CACHE::'};
 }
 
 sub wrap {
-  my $mirror        = shift;
-  my $class         = $mirror->class || 'Class::Prototyped';
-  my $wrapped       = $class->new;
-  my $wrappedMirror = $wrapped->reflect;
+	my $mirror        = shift;
+	my $class         = $mirror->class || 'Class::Prototyped';
+	my $wrapped       = $class->new;
+	my $wrappedMirror = $wrapped->reflect;
 
-  # add all the slots from the original object
-  $wrappedMirror->addSlots( $mirror->getSlots );
+	# add all the slots from the original object
+	$wrappedMirror->addSlots($mirror->getSlots);
 
-  # delete all my original slots
-  # so that the wrapped gets called
-  $mirror->deleteSlots( $mirror->slotNames );
-  $mirror->addSlots( @_, 'wrapped**' => $wrapped );
-  $mirror;
+	# delete all my original slots
+	# so that the wrapped gets called
+	$mirror->deleteSlots($mirror->slotNames);
+	$mirror->addSlots(@_, [qw(wrapped* promote)] => $wrapped);
+	$mirror;
 }
 
 sub unwrap {
-  my $mirror  = shift;
-  my $wrapped = $mirror->getSlot('wrapped*')
-    or Carp::croak "unwrapping without a wrapped\n";
-  my $wrappedMirror = $wrapped->reflect;
-  $mirror->deleteSlots( $mirror->slotNames );
-  $mirror->addSlots( $wrappedMirror->getSlots );
+	my $mirror  = shift;
+	my $wrapped = $mirror->getSlot('wrapped*')
+		or Carp::croak "unwrapping without a wrapped\n";
+	my $wrappedMirror = $wrapped->reflect;
+	$mirror->deleteSlots($mirror->slotNames);
+	$mirror->addSlots($wrappedMirror->getSlots);
 
-  #  $wrappedMirror->deleteSlots( $wrappedMirror->slotNames );
-  $mirror;
+	#  $wrappedMirror->deleteSlots( $wrappedMirror->slotNames );
+	$mirror;
 }
 
 sub delegate {
-  my $mirror = shift;
+	my $mirror = shift;
 
-  while ( my ( $name, $value ) = splice( @_, 0, 2 ) ) {
-    my @names = ( UNIVERSAL::isa( $name, 'ARRAY' ) ? @$name : $name );
-    my @conflicts;
+	while (my ($name, $value) = splice(@_, 0, 2)) {
+		my @names = (UNIVERSAL::isa($name, 'ARRAY') ? @$name : $name);
+		my @conflicts;
 
-    foreach my $slotName (@names) {
-      push ( @conflicts, grep { $_ eq $slotName } $mirror->slotNames );
-    }
-    Carp::croak(
-      "delegate would cause conflict with existing slots\n" . "pattern: "
-      . join ( '|',  @names ) . " , conflicting slots: "
-      . join ( ', ', @conflicts ) )
-      if @conflicts;
+		foreach my $slotName (@names) {
+			push (@conflicts, grep { $_ eq $slotName } $mirror->slotNames);
+		}
+		Carp::croak(
+			"delegate would cause conflict with existing slots\n" . "pattern: "
+				. join ('|',  @names) . " , conflicting slots: "
+				. join (', ', @conflicts))
+			if @conflicts;
 
-    my $delegateMethod;
-    if ( UNIVERSAL::isa( $value, 'ARRAY' ) ) {
-      $delegateMethod = $value->[1];
-      $value = $value->[0];
-    }
-    my $delegate = $mirror->getSlot($value) || $value;
-    Carp::croak("Can't delegate to a subroutine\nslot: $name")
-      if ( UNIVERSAL::isa( $delegate, 'CODE' ) );
+		my $delegateMethod;
+		if (UNIVERSAL::isa($value, 'ARRAY')) {
+			$delegateMethod = $value->[1];
+			$value          = $value->[0];
+		}
+		my $delegate = $mirror->getSlot($value) || $value;
+		Carp::croak("Can't delegate to a subroutine\nslot: $name")
+			if (UNIVERSAL::isa($delegate, 'CODE'));
 
-    foreach my $slotName (@names) {
-      my $method = defined($delegateMethod) ? $delegateMethod : $slotName;
-      $mirror->addSlot(
-        $slotName => sub {
-          shift;    # discard original recipient
-          $delegate->$method(@_);
-        }
-      );
-    }
-  }
+		foreach my $slotName (@names) {
+			my $method = defined($delegateMethod) ? $delegateMethod : $slotName;
+			$mirror->addSlot(
+				$slotName => sub {
+					shift;    # discard original recipient
+					$delegate->$method(@_);
+					}
+			);
+		}
+	}
 }
 
 sub findImplementation {
-  my $mirror   = shift;
-  my $slotName = shift;
+	my $mirror   = shift;
+	my $slotName = shift;
 
-  my $object = $mirror->object;
-  UNIVERSAL::can( $object, $slotName ) or return;
+	my $object = $mirror->object;
+	UNIVERSAL::can($object, $slotName) or return;
 
-  my $slots = $mirror->_slots;
-  exists $slots->{$slotName} and return wantarray ? 'self*' : $object;
+	my $slots = $mirror->_slots;
+	exists $slots->{$slotName} and return wantarray ? 'self*' : $object;
 
-  foreach my $parentName ( $mirror->slotNames('PARENT') ) {
-    my $mirror =
-      Class::Prototyped::Mirror->new(
-      scalar( $mirror->getSlot($parentName) ) );
-    if (wantarray) {
-      my (@retval) = $mirror->findImplementation($slotName);
-      scalar(@retval) and return ( $parentName, @retval );
-    }
-    else {
-      my $retval = $mirror->findImplementation($slotName);
-      $retval and return $retval;
-    }
-  }
-  Carp::croak("fatal error in findImplementation");
+	foreach my $parentName ($mirror->slotNames('PARENT')) {
+		my $mirror =
+			Class::Prototyped::Mirror->new(
+			scalar($mirror->getSlot($parentName)));
+		if (wantarray) {
+			my (@retval) = $mirror->findImplementation($slotName);
+			scalar(@retval) and return ($parentName, @retval);
+		}
+		else {
+			my $retval = $mirror->findImplementation($slotName);
+			$retval and return $retval;
+		}
+	}
+	Carp::croak("fatal error in findImplementation");
 }
 
 # load the given file or package in the receiver's namespace
@@ -1113,30 +1517,30 @@ sub findImplementation {
 #   is happening (as long as you don't change packages in the
 #   included code)
 sub include {
-  my $mirror       = shift;
-  my $name         = shift;
-  my $accessorName = shift;
+	my $mirror       = shift;
+	my $name         = shift;
+	my $accessorName = shift;
 
-  $name = "'$name'" if $name =~ /\.p[lm]$/i;
+	$name = "'$name'" if $name =~ /\.p[lm]$/i;
 
-  my $object  = $mirror->object;
-  my $package = $mirror->package;
-  my $text    = "package $package;\n";
-  $text .= "*$package\::$accessorName = sub { \$object };\n"
-    if defined($accessorName);
+	my $object  = $mirror->object;
+	my $package = $mirror->package;
+	my $text    = "package $package;\n";
+	$text .= "*$package\::$accessorName = sub { \$object };\n"
+		if defined($accessorName);
 
-  #  $text .= "sub $accessorName { \$object };\n" if defined($accessorName);
-  $text .= "require $name;\n";
-  my $retval = eval $text;
-  Carp::croak("include failed\npackage: $package include: $name error: $@")
-    if $@;
+	#  $text .= "sub $accessorName { \$object };\n" if defined($accessorName);
+	$text .= "require $name;\n";
+	my $retval = eval $text;
+	Carp::croak("include failed\npackage: $package include: $name error: $@")
+		if $@;
 
-  if ( substr( $name, -1 ) eq "'" ) {
-    $mirror->_vivified_methods(0);
-    $mirror->_autovivify_methods;
-  }
+	if (substr($name, -1) eq "'") {
+		$mirror->_vivified_methods(0);
+		$mirror->_autovivify_methods;
+	}
 
-  $mirror->deleteSlots($accessorName) if defined($accessorName);
+	$mirror->deleteSlots($accessorName) if defined($accessorName);
 }
 
 1;
@@ -1229,6 +1633,28 @@ In Self, to examine the structure of an object, you use a mirror.  Just like
 using his shield as a mirror enabled Perseus to slay Medusa, holding up a
 mirror enables us to look upon an object's structure without name space
 collisions.
+
+Once you have a mirror, you can add and delete slots like so:
+
+    my $cp = Class::Prototyped->new();
+    my $mirror = $cp->reflect();
+    $mirror->addSlots(
+      field1 => 'foo',
+      sub1   => sub {
+        print "this is sub1 printing field1: '".$_[0]->field1."'\n";
+      },
+    );
+
+    $mirror->deleteSlot('sub1');
+
+In addition, there is a more verbose syntax for C<addSlots> where the slot name
+is replaced by an anonymous array - this is most commonly used to control the
+slot attributes.
+
+    $cp->reflect->addSlot(
+      [qw(field1 FIELD)] => 'foo',
+      [qw(sub1 METHOD)]  => sub { print "hi there.\n"; },
+    );
 
 Because the mirror methods C<super>, C<addSlot>(C<s>), C<deleteSlot>(C<s>), and
 C<getSlot>(C<s>) are called frequently on objects, there is an import keyword
@@ -1383,10 +1809,8 @@ because it looks ugly to add a single slot by calling C<addSlots>.
 
 If you need to reorder the parent slots on an object, look at
 C<promoteParents>.  That said, there's a shortcut for prepending a slot to
-the inheritance hierarchy.  Simply add a second asterisk to the end of the
-slotname when calling C<addSlots>.  The second asterisk will be automatically
-stripped from the end of the slotname before the slot is prepended to the
-hierarchy.
+the inheritance hierarchy.  Simply define C<'promote'> as a slot attribute
+using the extended slot syntax.
 
 Finally, in keeping with our principle that classes are first-class object,
 the inheritance hierarchy of classes can be modified through C<addSlots> and
@@ -1394,7 +1818,7 @@ C<deleteSlots>, just like it can for objects.  The following code adds the
 C<$foo> object as a parent of the MyClass class, prepending it to the
 inheritance hierarchy:
 
-    MyClass->reflect->addSlots('foo**' => $foo);
+    MyClass->reflect->addSlots([qw(foo* promote)] => $foo);
 
 =head2 Operator Overloading
 
@@ -1465,10 +1889,10 @@ subroutine is attached.  From within the subroutine, you can use the C<super>
 mirror method to make an inherited call.  However, because we'd rather not
 write code that attempts to guess as to whether or not the subroutine uses the
 C<super> construct, you have to tell C<addSlots> that the subroutine needs to
-have this wrapper placed around it.  To do this, simply append an "!" to the
-end of the slot name.  This "!" does not belong to the slot name - it is
-simply an indicator to C<addSlots> that the subroutine needs to have C<super>
-support enabled.
+have this wrapper placed around it.  To do this, simply use the extended
+C<addSlots> syntax (see the method description for more information) and pass
+in the slot attribute C<'superable'>.  The following examples use the minimalist
+form of the extended syntax.
 
 For instance, the following code will work:
 
@@ -1479,8 +1903,8 @@ For instance, the following code will work:
     );
 
     my $p2 = Class::Prototyped->new(
-        '*'       => $p1,
-        'method!' => sub {
+        '*'                     => $p1,
+        [qw(method superable)]' => sub {
             print "this is method in p2 calling method in p1: ";
             $_[0]->reflect->super('method');
         },
@@ -1495,17 +1919,17 @@ object to another.  The proper way to do this is like so:
   $foo->reflect->addSlot($bar->reflect->getSlot('method'));
 
 When the C<getSlot> method is called in an array context, it returns both the
-slot name and the slot.  If it notices that the slot in question is a method
-and that it is a method wrapped so that inherited methods can be called, it
-will automatically append an "!" to the returned slot name, thus making it
-safe for use in C<addSlot>.
+complete format for the slot identifier and the slot.  If it notices that the
+slot in question is that it is a wrapped so that inherited methods can be
+called, it will automatically supply the C<'superable'> attribute, thus making
+it safe for use in C<addSlot>.
 
 Finally, to help protect the code, the C<super> method is smart enough to
 determine whether it was called within a wrapped subroutine.  If it wasn't, it
-croaks, thus indicating that the method should have had an "!" appended to the
-slot name when it was added.  If you wish to disable this checking (which will
-improve the performance of your code, of course, but could result in B<very>
-hard to trace bugs if you haven't been careful), see the import option
+croaks, thus indicating that the method should have had the C<'superable'>
+attribute set when it was added.  If you wish to disable this checking (which
+will improve the performance of your code, of course, but could result in
+B<very> hard to trace bugs if you haven't been careful), see the import option
 C<:SUPER_FAST>.
 
 
@@ -1558,27 +1982,13 @@ objects.  Thus, you can write code like:
 
 =item :TIED_INTERFACE
 
-This allows you to specify the sort of tied interface you wish to offer when
-code attempts to access a C<Class::Prototyped> object as a hash reference.
-This option expects that the second parameter will specify either the package
-name or an alias.  The currently known aliases are:
-
-=over 4
-
-=item default
-
-This specifies C<Class::Prototyped::Tied::Default> as the tie class.  The
-default behavior is to allow access to existing fields, but attempts to create
-fields, access methods, or delete slots will croak.
-
-=item autovivify
-
-This specifies C<Class::Prototyped::Tied::AutoVivify> as the tie class.  The
-behavior of this package allows access to existing fields, will automatically
-create field slots if they don't exist, and will allow deletion of field slots.
-Attempts to access or delete method or parent slots will croak.
-
-=back
+This is no longer supported.  Sorry for the very short notice - if you have
+a specific need, please let me know and I will discuss your needs with you
+and determine whether they can be addressed in a manner that doesn't require
+you to rewrite your code, but still allows others to make use of less global
+control over the tied interfaces used.  See
+C<Class::Prototyped::Mirror::tiedInterfacePackage> for the preferred way of
+doing this.
 
 =back
 
@@ -1608,7 +2018,7 @@ before C<class*>, which points to C<MyClass>):
 
     my $foo = MyClass->new(
         field1  => 123,
-        'bar**' => $bar,
+        [qw(bar* promote)] => $bar,
     );
 
 =head2 newPackage() - Construct a new C<Class::Prototyped> object in a
@@ -1741,13 +2151,129 @@ Allows you to add or override slot definitions in the receiver.
     );
     $p->doSomething( $p->fred );
 
+In addition to the simple form, there is an extended syntax for specifying the
+slot.  In place of the slotname, pass an array reference composed like so:
+
+C<< addSlots( [$slotName, $slotType, %slotAttributes] => $slotValue ); >>
+
+C<$slotName> is simply the name of the slot, including the trailing C<*> if it
+is a parent slot.  C<$slotType> should be C<'FIELD'>, C<'METHOD'>, or
+C<'PARENT'>.  C<%slotAttributes> should be a list of attribute/value pairs.  It
+is common to use qw() to reduce the amount of typing:
+
+    $p->reflect->addSlot(
+        [qw(bar FIELD)] => "this is a field",
+    );
+
+    $p->reflect->addSlot(
+        [qw(bar FIELD constant 1)] => "this is a constant field",
+    );
+
+    $p->reflect->addSlot(
+        [qw(foo METHOD)] => sub { print "normal method.\n"; },
+    );
+
+    $p->reflect->addSlot(
+        [qw(foo METHOD superable 1)] => sub { print "superable method.\n"; },
+    );
+
+    $p->reflect->addSlot(
+        [qw(parent* PARENT)] => $parent,
+    );
+
+    $p->reflect->addSlot(
+        [qw(parent2* PARENT promote 1)] => $parent2,
+    );
+
+To make using the extended syntax a bit less cumbersome, however, the following
+shortcuts are allowed:
+
+=over 4
+
+=item *
+
+C<$slotType> can be omitted.  In this case, the slot's type will be determined 
+by inspecting the slot's name (to determine if it is a parent slot) and the 
+slot's value (to determine whether it is a field or method slot).  The 
+C<$slotType> value can, however, be used to supply a reference to a code object 
+as the value for a field slot.  Note that this means that C<FIELD>, C<METHOD>, 
+and C<PARENT> are not legal attribute names (since this would make parsing 
+difficult).
+
+=item *
+
+If there is only one attribute and if the value is C<1>, then the value can be
+omitted.
+
+=back
+
+Using both of the above contractions, the following are valid short forms for
+the extended syntax:
+
+    $p->reflect->addSlot(
+        [qw(bar constant)] => "this is a constant field",
+    );
+
+    $p->reflect->addSlot(
+        [qw(foo superable)] => sub { print "superable method.\n"; },
+    );
+
+    $p->reflect->addSlot(
+        [qw(parent2* promote)] => $parent2,
+    );
+
+The currently defined slot attributes are as follows:
+
+=over
+
+=item Field Slots
+
+=over
+
+=item C<constant>
+
+When true, this defines the field slot as constant, disabling the ability to 
+modify it using the C<< $object->field($newValue) >> syntax.  The value may 
+still be modified using the hash syntax (i.e. C<< $object->{field} = $newValue 
+>>).  This is mostly useful if you have an object method call that takes 
+parameters, but you wish to replace it on a given object with a hard-coded value 
+by using a field (which makes inspecting the value of the slot through 
+C<Data::Dumper> much easier since code objects are opaque).
+
+=back
+
+=item Method Slots
+
+=over
+
+=item C<superable>
+
+When true, this enables the C<< $self->reflect->super( . . . ) >> calls for this 
+method slot.
+
+=back
+
+=item Parent Slots
+
+=over
+
+=item C<promote>
+
+When true, this parent slot is promoted ahead of any other parent slots on the 
+object.  This attribute is ephemeral - it is not returned by calls to 
+C<getSlot>.
+
+=back
+
+=back
+
 =head2 deleteSlot() - An alias for deleteSlots
 
 =head2 deleteSlots() - Delete one or more of the receiver's slots by name
 
-This will let you delete existing slots in the receiver.
-If those slots were defined earlier in the prototype chain,
-those earlier definitions will now be available.
+This will let you delete existing slots in the receiver. If those slots were 
+defined earlier in the prototype chain, those earlier definitions will now be 
+available.
 
     my $p1 = Class::Prototyped->new(
         field1 => 123,
@@ -1768,9 +2294,9 @@ those earlier definitions will now be available.
 
 =head2 slotNames() - Returns a list of all the slot names
 
-This is passed an optional type parameter.  If specified, it should be one of
-C<'FIELD'>, C<'METHOD'>, or C<'PARENT'>.  For instance, the following will
-print out a list of all slots of an object:
+This is passed an optional type parameter.  If specified, it should be one of 
+C<'FIELD'>, C<'METHOD'>, or C<'PARENT'>.  For instance, the following will print 
+out a list of all slots of an object:
 
   print join(', ', $obj->reflect->slotNames)."\n";
 
@@ -1803,16 +2329,68 @@ defined for the entire inheritance hierarchy
 Note that this will return duplicate slot names if inherited slots are
 obscured.
 
-=head2 getSlot() - Returns a list of all the slots
+=head2 getSlot() - Returns the requested slot
+
+When called in scalar context, this returns the thing in the slot.  When called 
+in list context, it returns both the complete form of the extended syntax for 
+specifying a slot name and the thing in the slot.  There is an optional 
+parameter that can be used to modify the format of the return value in list 
+context.  The allowable values are:
+
+=over
+
+=item *
+
+C<'default'> - the extended slot syntax and the slot value are returned
+
+=item *
+
+C<'simple'> - the slot name and the slot value are returned.  Note that in this 
+mode, there is no access to any attributes the slot may have
+
+=item *
+
+C<'rotated'> - the slot name and the following hash are returned like so:
+
+  $slotName => {
+    attribs => %slotAttribs,
+    type => $slotType,
+    value => $slotValue
+  },
+
+=back
+
+The latter two options are quite useful when used in conjunction with the 
+C<getSlots> method.
 
 =head2 getSlots() - Returns a list of all the slots
 
-This returns a list of slotnames and their values ready for sending to
-C<addSlots>.  It takes the same optional parameter passed to C<slotNames>.
+This returns a list of extended syntax slot specifiers and their values ready 
+for sending to C<addSlots>.  It takes first the optional parameter passed to 
+C<slotNames> which specifies the type of slot (C<'FIELD'>, C<'METHOD'>, 
+C<'PARENT'>, or C<undef>) and then the optional parameter passed to C<getSlot>, 
+which specifies the format for the return value.  If the latter is C<'simple'>, 
+the returned values can be passed to C<addSlots>, but any non-default slot 
+attributes (i.e. C<superable> or C<constant>) will be lost.  If the latter is
+C<'rotated'>, the returned values are completely inappropriate for passing to
+C<addSlots>.  Both C<'simple'> and C<'rotated'> are appropriate for assigning
+the return values into a hash.
 
 For instance, to add all of the field slots in C<$bar> to C<$foo>:
 
   $foo->reflect->addSlots($bar->reflect->getSlots('FIELD'));
+
+To get a list of all of the slots in the C<'simple'> format:
+
+  my %barSlots = $bar->reflect->getSlots(undef, 'simple');
+
+To get a list of all of the superable method slots in the C<'rotated'> format:
+
+  my %barMethods = $bar->reflect->getSlots('METHOD', 'rotated');
+  foreach my $slotName (%barMethods) {
+    delete $barMethods{$slotName}
+      unless $barMethods{$slotName}->{attribs}->{superable};
+  }
 
 =head2 promoteParents() - This changes the ordering of the parent slots
 
@@ -1822,6 +2400,43 @@ object.  These parent slots will be moved forward in the hierarchy in the order
 that they are passed.  Unspecified parent slots will retain their current
 positions relative to other unspecified parent slots, but as a group they will
 be moved to the end of the hierarchy.
+
+=head2 tiedInterfacePackage() - This specifies the tied interface package
+
+This allows you to specify the sort of tied interface you wish to offer when
+code accesses the object as a hash reference.  If no parameter is passed,
+this will return the current tied interface package active for the object.
+If a parameter is passed, it should specify either the package name or an
+alias.  The currently known aliases are:
+
+=over 4
+
+=item default
+
+This specifies C<Class::Prototyped::Tied::Default> as the tie class.  The
+default behavior is to allow access to existing fields, but attempts to create
+fields, access methods, or delete slots will croak.  This is the tie class
+used by C<Class::Prototyped> (unless you do something very naughty and call
+C<< Class::Prototyped->reflect->tiedInterfacePackage($not_default) >>), and
+as such is the fallback behavior for classes and objects if they don't get a
+different value from their inheritance.
+
+=item autovivify
+
+This specifies C<Class::Prototyped::Tied::AutoVivify> as the tie class.  The
+behavior of this package allows access to existing fields, will automatically
+create field slots if they don't exist, and will allow deletion of field slots.
+Attempts to access or delete method or parent slots will croak.
+
+=back
+
+Calls to C<new> and C<clone> will use the tied interface in use on the
+existing object/package.  When C<reflect> is called for the first time on a
+class package, it will use the tied interface of its first parent class (i.e.
+C<$ISA[0]>).  If that package has not yet had C<reflect> called on it, it
+will check its parent, and so on and so forth.  If none of the packages in
+the primary inheritance fork have been reflected upon, the value for
+C<Class::Prototyped> will be used, which should be C<default>.
 
 =head2 wrap()
 
@@ -1876,17 +2491,16 @@ thisObject().
 =head1 AUTHOR
 
 Written by Ned Konz, perl@bike-nomad.com
-and Toby Everett, teverett@alascom.att.com or toby@everettak.org.
+and Toby Ovod-Everett, tovod-everett@alascom.att.com or toby@ovod-everett.org.
 5.005_03 porting by chromatic.
 
-Toby Everett is currently maintaining the package.
+Toby Ovod-Everett is currently maintaining the package.
 
 =head1 LICENSE
 
-Copyright (c) 2001, 2002 Ned Konz and Toby Everett.
-All rights reserved.
-This program is free software; you can redistribute it
-and/or modify it under the same terms as Perl itself.
+Copyright 2001-2003 Ned Konz and Toby Ovod-Everett.  All rights reserved. This 
+program is free software; you can redistribute it and/or modify it under the 
+same terms as Perl itself.
 
 =head1 SEE ALSO
 

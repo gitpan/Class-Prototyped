@@ -1,11 +1,16 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
-$^W++;
-$|++;
 use strict;
-use Test;
-BEGIN { plan tests => 159, todo => [ ] }
+$^W++;
 use Class::Prototyped qw(:REFLECT :EZACCESS :OVERLOAD);
+use Data::Dumper;
+use Test;
+
+BEGIN {
+	$|++;
+	plan tests => 159,
+}
+
+$Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Sortkeys = 1;
 
 sub Class::Prototyped::slotNames      { $_[0]->reflect->slotNames }
 sub Class::Prototyped::allSlotNames   { $_[0]->reflect->allSlotNames }

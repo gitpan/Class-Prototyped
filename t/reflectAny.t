@@ -1,9 +1,16 @@
 use strict;
 $^W++;
 use Class::Prototyped qw(:REFLECT);
+use Data::Dumper;
 use Test;
 
-BEGIN { $|++; plan tests => 5; }
+BEGIN {
+	$|++;
+	plan tests => 5;
+}
+
+$Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Sortkeys = 1;
 
 package A;
 sub a {'A.a'}
