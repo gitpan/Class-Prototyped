@@ -1,6 +1,4 @@
 use Benchmark qw(cmpthese timeit);
-use Data::Dumper;
-use Tie::CPHash;
 
 package My::Funky::Class;
 
@@ -9,14 +7,6 @@ sub foo {
 }
 
 package main;
-
-#print Data::Dumper->Dump([\%main::]);
-my $package = 'My::Funky::Class';
-
-my %cphash;
-tie(%cphash, 'Tie::CPHash');
-
-my $cphash = \$cphash;
 
 $My::Funky::Class::mirrors = { $package => 'foo' };
 
@@ -30,22 +20,6 @@ mytimethese(500_000, {
 	'bless_constant' => sub {
 		bless {}, 'My::Funky::Class';
 	},
-	'tied' => sub {
-		tied(%cphash);
-	},
-	hash_lookup => sub {
-		$My::Funky::Class::mirrors->{$cphash} || 'foo';
-		$My::Funky::Class::mirrors->{$package} || 'foo';
-	},
-	hash_lookup2 => sub {
-		exists $My::Funky::Class::mirrors->{$cphash} ? $My::Funky::Class::mirrors->{$cphash} : 'foo';
-		exists $My::Funky::Class::mirrors->{$package} ? $My::Funky::Class::mirrors->{$package} : 'foo';
-	},
-	ref_test => sub {
-		ref($cphash) ? $My::Funky::Class::mirrors->{$cphash} : 'foo';
-		ref($package) ? $My::Funky::Class::mirrors->{$package} : 'foo';
-	},
-
 });
 
 

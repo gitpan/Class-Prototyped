@@ -6,7 +6,7 @@ use Test;
 
 BEGIN {
   $|++;
-  plan tests => 25
+  plan tests => 27
 }
 
 $Data::Dumper::Sortkeys = 1;
@@ -104,7 +104,13 @@ ok( $p6->value, 11);
 my $p7 = MyClass::Sub->new(value => 20);
 ok( $p7->value, 25);
 
-my $np3 = bless{}, 'MyClass::Sub';
-ok( $np3->foo,  'Supered: '.$np3 );
+my $mcs_dump = Data::Dumper->Dump([MyClass::Sub->reflect->getSlots]);
+{
+	my $np3 = bless {}, 'MyClass::Sub';
+	ok( $np3->foo,  'Supered: '.$np3 );
+	ok( Data::Dumper->Dump([$np3->reflect->getSlots]), $mcs_dump);
+}
+	ok( Data::Dumper->Dump([MyClass::Sub->reflect->getSlots]), $mcs_dump);
+
 
 # vim: ft=perl

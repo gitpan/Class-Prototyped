@@ -24,7 +24,7 @@ package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '0.95';
+$Class::Prototyped::VERSION = '0.96';
 
 sub import {
 	while (my $symbol = shift) {
@@ -478,6 +478,10 @@ sub new {
 	return $Class::Prototyped::Mirror::mirrors{ $entity } ||= bless \$object, $class;
 }
 
+
+#This code exists to support calling ->reflect->super on a "normal" object that
+#is blessed into a C::P class.
+
 package Class::Prototyped::Mirror::Normal;
 
 @Class::Prototyped::Mirror::Normal::ISA = qw(Class::Prototyped::Mirror);
@@ -507,7 +511,8 @@ package Class::Prototyped::Mirror;
 
 sub autoloadCall {
 	my $mirror  = shift;
-	my $package = $mirror;
+
+	my $package = $mirror->package();
 	no strict 'refs';
 	my $call = ${"$package\::AUTOLOAD"};
 	$call =~ s/.*:://;
@@ -1552,7 +1557,6 @@ C<Class::Prototyped> - Fast prototype-based OO programming in Perl
 
 =head1 SYNOPSIS
 
-    use blib;
     use strict;
     use Class::Prototyped ':EZACCESS';
 
@@ -1600,8 +1604,23 @@ in Perl. You can provide different subroutines for each object, and also
 have objects inherit their behavior and state from another object.
 
 The structure of an object is inspected and modified through I<mirrors>, which
-are created by calling B<reflect> on an object or class that inherits from
+are created by calling C<reflect> on an object or class that inherits from
 C<Class::Prototyped>.
+
+
+=head1 WHEN TO USE THIS MODULE
+
+When I reach for C<Class::Prototyped>, it's generally because I really need it.  
+When the cleanest way of solving a problem is for the code that uses a module to 
+subclass from it, that is generally a sign that C<Class::Prototyped> would be of 
+use.  If you find yourself avoiding the problem by passing anonymous subroutines 
+as parameters to the C<new> method, that's another good sign that you should be 
+using prototype based programming.  If you find yourself storing anonymous 
+subroutines in databases, configuration files, or text files, and then writing 
+infrastructure to handle calling those anonymous subroutines, that's yet another 
+sign.  When you expect the people using your module to want to change the 
+behavior, override subroutines, and so forth, that's a sign.
+
 
 =head1 CONCEPTS
 
@@ -1626,6 +1645,7 @@ to code blocks, the former are not.  Distinguishing parent slots is not so
 easy, so instead a simple naming convention is used.  If the name of the slot
 ends in an asterisk, the slot is a parent slot.  If you have programmed in
 Self, this naming convention will feel very familiar.
+
 
 =head2 Reflecting
 
@@ -1661,6 +1681,60 @@ C<getSlot>(C<s>) are called frequently on objects, there is an import keyword
 C<:EZACCESS> that adds methods to the object space that call the appropriate
 reflected variants.
 
+
+=head2 Slot Attributes
+
+Slot attributes allow the user to specify additional information and behavior
+relating to a specific slot in an extensible manner.  For instance, one might
+want to mark a specific field slot as constant or to attach a description to a
+given slot.
+
+Slot attributes are divided up in two ways.  The first is by the type of slot - 
+C<FIELD>, C<METHOD>, or C<PARENT>.  Some slot attributes apply to all three, 
+some to just two, and some to only one.  The second division is on the type of
+slot attribute:
+
+=over 4
+
+=item implementor
+
+These are responsible for implementing the behavior of a slot.  An example is a 
+C<FIELD> slot with the attribute C<constant>.  A slot is only allowed one 
+implementor.  All slot types have a default implementor.  For C<FIELD> slots, it 
+is a read-write scalar.  For C<METHOD> slots, it is the passed anonymous 
+subroutine.  For C<PARENT> slots, C<implementor> and C<filter> slot attributes 
+don't really make sense.
+
+=item filter
+
+These filter access to the C<implementor>.  The quintessential example is the 
+C<profile> attribute.  When set, this increments a counter in 
+C<$Class::Prototyped::Mirror::PROFILE::counts> every time the underlying C<FIELD> 
+or C<METHOD> is accessed.  Filter attributes can be stacked, so each attribute
+is assigned a rank with lower values being closer to the C<implementor> and
+higher values being closer to the caller.
+
+=item advisory
+
+These slot attributes serve one of two purposes.  They can be used to store 
+information about the slot (i.e. C<description> attributes), and they can be 
+used to pass information to the C<addSlots> method (i.e. the C<promote> 
+attribute, which can be used to promote a new C<PARENT> slot ahead of all the 
+existing C<PARENT> slots).
+
+=back
+
+There is currently no formal interface for creating your own attributes - if you 
+feel the need for new attributes, please contact the maintainer first to see if 
+it might make sense to add the new attribute to C<Class::Prototyped>.  If not, 
+the contact might provide enough impetus to define a formal interface.  The 
+attributes are currently defined in C<$Class::Prototyped::Mirror::attributes>.
+
+Finally, see the C<defaultAttributes> method for information about setting 
+default attributes.  This can be used, for instance, to turn on profiling 
+everywhere.
+
+
 =head2 Classes vs. Objects
 
 In Self, everything is an object and there are no classes at all.  Perl, for
@@ -1669,23 +1743,23 @@ would be better not to throw out the conventional way of structuring
 inheritance hierarchies, so in C<Class::Prototyped>, classes are first-class
 objects.
 
-However, objects are not first-class classes.  To understand this dichotomy, we
-need to understand that there is a difference between the way "classes" and the
-way "objects" are expected to behave.  The central difference is that "classes"
-are expected to persist whether or not that are any references to them.  If you
-create a class, the class exists whether or not it appears in anyone's @ISA and
-whether or not there are any objects in it.  Once a class is created, it
+However, objects are not first-class classes.  To understand this dichotomy, we 
+need to understand that there is a difference between the way "classes" and the 
+way "objects" are expected to behave.  The central difference is that "classes" 
+are expected to persist whether or not that are any references to them.  If you 
+create a class, the class exists whether or not it appears in anyone's C<@ISA> 
+and whether or not there are any objects in it.  Once a class is created, it 
 persists until the program terminates.
 
 Objects, on the other hand, should follow the normal behaviors of
 reference-counted destruction - once the number of references to them drops to
 zero, they should miraculously disappear - the memory they used needs to be
-returned to Perl, their DESTROY methods need to be called, and so forth.
+returned to Perl, their C<DESTROY> methods need to be called, and so forth.
 
 Since we don't require this behavior of classes, it's easy to have a way to get
 from a package name to an object - we simply stash the object that implements
 the class in C<$Class::Prototyped::Mirror::objects{$package}>.  But we can't do
-this for objects, because if we do the object will persist forever, for that
+this for objects, because if we do the object will persist forever because that
 reference will always exist.
 
 Weak references would solve this problem, but weak references are still
@@ -1697,7 +1771,8 @@ object has an explicit package name (I<i.e.> something other than the
 auto-generated one), it is considered to be a class, which means it persists
 even if the object goes out of scope.
 
-To create such an object, use the C<newPackage> method, like so:
+To create such an object, use the C<newPackage> method, like so (the 
+encapsulating block exists solely to demonstrate that classes are not scoped):
 
     {
       my $object = Class::Prototyped->newPackage('MyClass',
@@ -1741,6 +1816,7 @@ works perfectly:
 But keep in mind that C<$package> has to be a class, not an auto-generated
 package name for an object.
 
+
 =head2 Class Manipulation
 
 This lets us have tons of fun manipulating classes at run time. For instance,
@@ -1751,23 +1827,31 @@ write:
 
     MyClass->reflect->addSlot(myMethod => sub {print "Hi there\n"});
 
-Just as you can C<clone> objects, you can C<clone> classes that are derived
-from C<Class::Prototyped>. This creates a new object that has a copy of all of
-the slots that were defined in the class.  Note that if you simply want to be
-able to use Data::Dumper on a class, calling MyClass->reflect->object is the
-preferred approach.  Or simply use the C<dump> mirror method.
+If you want to access a class that doesn't inherit from C<Class::Prototyped>, 
+and you want to avoid specifying C<:REFLECT> (which adds C<reflect> to the 
+C<UNIVERSAL> package), you can make the call like so:
+
+    my $mirror = Class::Prototyped::Mirror->new('MyClass');
+    $mirror->addSlot(myMethod => sub {print "Hi there\n"});
+
+Just as you can C<clone> objects, you can C<clone> classes that are derived from 
+C<Class::Prototyped>. This creates a new object that has a copy of all of the 
+slots that were defined in the class.  Note that if you simply want to be able 
+to use C<Data::Dumper> on a class, calling C<< MyClass->reflect->object >> is 
+the preferred approach.  Or simply use the C<dump> mirror method.
 
 The code that implements reflection on classes automatically creates slot
 names for package methods as well as parent slots for the entries in C<@ISA>.
 This means that you can code classes like you normally do - by
 doing the inheritance in C<@ISA> and writing package methods.
 
-If you manually add subroutines to a package at run-time and want the slot
-information updated properly (although this really should be done via the
-addSlots mechanism, but maybe you're twisted:), you should do something like:
+If you manually add subroutines to a package at run-time and want the slot 
+information updated properly (although this really should be done via the 
+C<addSlots> mechanism, but maybe you're twisted:), you should do something like:
 
     $package->reflect->_vivified_methods(0);
     $package->reflect->_autovivify_methods;
+
 
 =head2 Parent Slots
 
@@ -1815,15 +1899,16 @@ using the extended slot syntax.
 Finally, in keeping with our principle that classes are first-class object,
 the inheritance hierarchy of classes can be modified through C<addSlots> and
 C<deleteSlots>, just like it can for objects.  The following code adds the
-C<$foo> object as a parent of the MyClass class, prepending it to the
+C<$foo> object as a parent of the C<MyClass> class, prepending it to the
 inheritance hierarchy:
 
     MyClass->reflect->addSlots([qw(foo* promote)] => $foo);
 
+
 =head2 Operator Overloading
 
 In C<Class::Prototyped>, you do operator overloading by adding slots with the
-right name.  First, when you do the B<use> on C<Class::Prototyped>, make sure
+right name.  First, when you do the C<use> on C<Class::Prototyped>, make sure
 to pass in C<:OVERLOAD> so that the operator overloading support is enabled.
 
 Then simply pass the desired methods in as part of the object creation like
@@ -1843,20 +1928,14 @@ will not show up as slots when reflecting on the class. However, C<addSlots>
 B<does> work for adding operator overloading to classes.  Thus, the following
 code does what is expected:
 
-    package MyClass;
-    @MyClass::ISA = qw(Class::Prototyped);
-
+    Class::Prototyped->newPackage('MyClass');
     MyClass->reflect->addSlots(
         '""' => sub { my $self = shift; $self->value( $self->value + 1 ) },
     );
 
-    package main;
-
     $foo = MyClass->new( value => 2 );
     print $foo, "\n";
 
-Provided, of course, that C<MyClass> finds its way into C<$foo> as a parent
-during C<$foo>'s instantiation.
 
 =head2 Object Class
 
@@ -1867,20 +1946,21 @@ C<Class::Prototyped>, the slot C<class*> points to the package name.
 
 The value of this slot can be returned quite easily like so:
 
-  $foo->reflect->class;
+    $foo->reflect->class;
 
 Class is set when C<new> is called on a package or object that has a named
 package.
 
+
 =head2 Calling Inherited Methods
 
 Methods (and fields) inherited from prototypes or classes are I<not>
-generally available using the usual Perl C<$self-E<gt>SUPER::something()>
+generally available using the usual Perl C<< $self->SUPER::something() >>
 mechanism.
 
 The reason for this is that C<SUPER::something> is hardcoded to the package in
 which the subroutine (anonymous or otherwise) was defined.  For the vast
-majority of programs, this will be C<main::>, and thus <SUPER::> will look in
+majority of programs, this will be C<main::>, and thus C<SUPER::> will look in
 C<@main::ISA> (not a very useful place to look).
 
 To get around this, a very clever wrapper can be automatically placed around
@@ -1916,39 +1996,125 @@ can be called directly on an object rather than through its mirror.
 The other thing of which you need to be aware is copying methods from one
 object to another.  The proper way to do this is like so:
 
-  $foo->reflect->addSlot($bar->reflect->getSlot('method'));
+    $foo->reflect->addSlot($bar->reflect->getSlot('method'));
 
 When the C<getSlot> method is called in an array context, it returns both the
-complete format for the slot identifier and the slot.  If it notices that the
-slot in question is that it is a wrapped so that inherited methods can be
-called, it will automatically supply the C<'superable'> attribute, thus making
-it safe for use in C<addSlot>.
+complete format for the slot identifier and the slot.  This ensures that slot
+attributes are passed along, including the C<superable> attribute.
 
-Finally, to help protect the code, the C<super> method is smart enough to
-determine whether it was called within a wrapped subroutine.  If it wasn't, it
-croaks, thus indicating that the method should have had the C<'superable'>
-attribute set when it was added.  If you wish to disable this checking (which
-will improve the performance of your code, of course, but could result in
-B<very> hard to trace bugs if you haven't been careful), see the import option
-C<:SUPER_FAST>.
+Finally, to help protect the code, the C<super> method is smart enough to 
+determine whether it was called within a wrapped subroutine.  If it wasn't, it 
+croaks indicating that the method should have had the C<superable> attribute set 
+when it was added.  If you wish to disable this checking (which will improve the 
+performance of your code, of course, but could result in B<very> hard to trace 
+bugs if you haven't been careful), see the import option C<:SUPER_FAST>.
+
+
+=head1 PERFORMANCE NOTES
+
+It is important to be aware of where the boundaries of prototyped based 
+programming lie, especially in a language like Perl that is not optimized for 
+it.  For instance, it might make sense to implement every field in a database as 
+an object.  Those field objects would in turn be attached to a record class. All 
+of those might be implemented using C<Class::Prototyped>.  However, it would be 
+very inefficient if every record that got read from the database was stored in a 
+C<Class::Prototyped> based object (unless, of course, you are storing code in 
+the database).  In that situation, it is generally good to choke off the 
+prototype-based behavior for the individual record objects.  For best 
+performance, it is important to confine C<Class::Prototyped> to those portions 
+of the code where behavior is mutable from outside of the module.  See the 
+documentation for the C<new> method of C<Class::Prototyped> for more information 
+about choking off C<Class::Prototyped> behavior.
+
+There are a number of performance hits when using C<Class::Prototyped>, relative 
+to using more traditional OO code.  B<It is important to note> that these 
+generally lie in the instantiation and creation of classes and objects and not 
+in the actual use of them.  The scripts in the C<perf> directory were designed 
+for benchmarking some of this material.
+
+=head2 Class Instantiation
+
+The normal way of creating a class is like this:
+
+    package Pack_123;
+    sub a {"hi";}
+    sub b {"hi";}
+    sub c {"hi";}
+    sub d {"hi";}
+    sub e {"hi";}
+
+The most efficient way of doing that using "proper" C<Class::Prototyped> methodology looks like this:
+
+    Class::Prototyped->newPackage("Pack_123");
+    push(@P_123::slots, a => sub {"hi";});
+    push(@P_123::slots, b => sub {"hi";});
+    push(@P_123::slots, c => sub {"hi";});
+    push(@P_123::slots, d => sub {"hi";});
+    push(@P_123::slots, e => sub {"hi";});
+    Pack_123->reflect->addSlots(@P_123::slots);
+
+This approach ensures that the new package gets the proper default attributes 
+and that the slots are created through C<addSlots>, thus ensuring that default 
+attributes are properly implemented.  It avoids multiple calls to C<< 
+->reflect->addSlot >>, though, which improves performance.  The idea behind
+pushing the slots onto an array is that it enables one to intersperse code with
+POD, since POD is not permitted inside of a single Perl statement.
+
+On a Pent 4 1.8GHz machine, the normal code runs in 120 usec, whereas the 
+C<Class::Prototyped> code runs in around 640 usec, or over 5 times slower.  A 
+straight call to C<addSlots> with all five methods runs in around 510 usec.  
+Code that creates the package and the mirror without adding slots runs in around 
+135 usec, so we're looking at an overhead of less than 100 usec per slot.  In a 
+situation where the "compile" time dominates the "execution" time (I'm using 
+those terms loosely as much of what happens in C<Class::Prototyped> is 
+technically execution time, but it is activity that traditionally would happen 
+at compile time), C<Class::Prototyped> might prove to be too much overhead.  On 
+the otherhand, you may find that demand loading can cut much of that overhead 
+and can be implemented less painfully than might otherwise be thought.
+
+=head2 Object Instantiation
+
+There is no need to even compare here.  Blessing a hash into a class takes less 
+than 2 usec.  Creating a new C<Class::Prototyped> object takes at least 60 or 70 
+times longer.  The trick is to avoid creating unnecessary C<Class::Prototyped> 
+objects.  If you know that all 10,000 database records are going to inherit all 
+of their behavior from the parent class, there is no point in creating 10,000 
+packages and all the attendant overhead.  The C<new> method for 
+C<Class::Prototyped> demonstrates how to ensure that those state objects are 
+created as normal Perl objects.
+
+=head2 Method Calls
+
+The good news is that method calls are just as fast as normal Perl method calls, 
+inherited or not.  This is because the existing Perl OO machinery has been 
+hijacked in C<Class::Prototyped>.  The exception to this is if C<filter> slot 
+attributes have been used, including C<wantarray>, C<superable>, and C<profile>.  
+In that situation, the added overhead is that for a normal Perl subroutine call 
+(which is faster than a method call because it is a static binding)
+
+=head2 Instance Variable Access
+
+The hash interface is not particularly fast, and neither is it good programming 
+practice.  Using the method interface to access fields is just as fast, however, 
+as using normal getter/setter methods.
 
 
 =head1 IMPORT OPTIONS
 
 =over 4
 
-=item :OVERLOAD
+=item C<:OVERLOAD>
 
 This configures the support in C<Class::Prototyped> for using operator
 overloading.
 
-=item :REFLECT
+=item C<:REFLECT>
 
-This defines UNIVERSAL::reflect to return a mirror for any class.
+This defines C<UNIVERSAL::reflect> to return a mirror for any class.
 With a mirror, you can manipulate the class, adding or deleting methods,
 changing its inheritance hierarchy, etc.
 
-=item :EZACCESS
+=item C<:EZACCESS>
 
 This adds the methods C<addSlot>, C<addSlots>, C<deleteSlot>, C<deleteSlots>,
 C<getSlot>, C<getSlots>, and C<super> to C<Class::Prototyped>.
@@ -1965,12 +2131,19 @@ The other methods in C<Class::Prototyped::Mirror> should be accessed through a
 mirror (otherwise you'll end up with way too much name space pollution for
 your objects:).
 
-=item :SUPER_FAST
+Note that it is bad form for published modules to use C<:EZACCESS> as you are 
+polluting everyone else's namespace as well.  If you B<really> want C<:EZACCESS> 
+for code you plan to publish, contact the maintainer and we'll see what we can 
+about creating a variant of C<:EZACCESS> that adds the shortcut methods to a 
+single class.  Note that using C<:EZACCESS> to do C<< $obj->addSlot() >> is 
+actually slower than doing C<< $obj->reflect->addSlot() >>.
+
+=item C<:SUPER_FAST>
 
 Switches over to the fast version of C<super> that doesn't check to see
-whether methods that use inherited calls had "!" appended to their slot names.
+whether slots that use inherited calls were defined as superable.
 
-=item :NEW_MAIN
+=item C<:NEW_MAIN>
 
 Creates a C<new> function in C<main::> that creates new C<Class::Prototyped>
 objects.  Thus, you can write code like:
@@ -1980,7 +2153,7 @@ objects.  Thus, you can write code like:
   my $foo = new(say_hi => sub {print "Hi!\n";});
   $foo->say_hi;
 
-=item :TIED_INTERFACE
+=item C<:TIED_INTERFACE>
 
 This is no longer supported.  Sorry for the very short notice - if you have
 a specific need, please let me know and I will discuss your needs with you
@@ -2020,6 +2193,25 @@ before C<class*>, which points to C<MyClass>):
         field1  => 123,
         [qw(bar* promote)] => $bar,
     );
+
+If you want to create normal Perl objects as child objects of a 
+C<Class::Prototyped> class in order to improve performance, implement your own 
+standard Perl C<new> method:
+
+    Class::Prototyped->newPackage('MyClass');
+    MyClass->reflect->addSlot(
+        new => sub {
+            my $class = shift;
+            my $self = {};
+            bless $self, $class;
+            return $self;
+        }
+    );
+
+It is still safe to use C<< $obj->reflect->super() >> in code that runs on such 
+an object.  All other reflection will automatically return the same results as
+inspecting the class to which the object belongs.
+
 
 =head2 newPackage() - Construct a new C<Class::Prototyped> object in a
 specific package.
@@ -2061,7 +2253,7 @@ which will automatically be called by the C<Class::Prototyped::DESTROY>
 method after the C<@ISA> has been cleaned up.
 
 This method should be defined to allow inherited method calls (I<i.e.> should
-use C<'destroy!'> to define the method) and should call
+use "C<[qw(destroy superable)]>" to define the method) and should call
 C<< $self->reflect->super('destroy'); >> at some point in the code.
 
 Here is a quick overview of the default destruction behavior for objects:
@@ -2113,23 +2305,26 @@ Final C<Class::Prototyped> specific cleanup is run.
 
 =back
 
-=head2 super() - Call a method defined in a parent
 
-If you use the :EZACCESS import flag, you will have C<super> defined for use
-to call inherited methods (see I<Calling Inherited Methods> above).
 
 =head1 C<Class::Prototyped::Mirror> Methods
 
-These are the methods you can call on the mirror returned from a C<reflect>
-call. If you specify :REFLECT in the C<use Class::Prototyped> line, addSlot,
-addSlots, deleteSlot, and deleteSlots will be callable on C<Class::Prototyped>
-objects as well.
+These are the methods you can call on the mirror returned from a C<reflect> 
+call. If you specify C<:EZACCESS> in the C<use Class::Prototyped> line, 
+C<addSlot>, C<addSlots>, C<deleteSlot>, C<deleteSlots>, C<getSlot>, C<getSlots>, 
+and C<super> will be callable on C<Class::Prototyped> objects as well.
+
+=head2 new() - Creates a new C<Class::Prototyped::Mirror> object
+
+Normally called via the C<reflect> method, this can be called directly to avoid 
+using the C<:REFLECT> import option for reflecting on non C<Class::Prototyped> 
+based classes.
 
 =head2 autoloadCall()
 
-If you add an AUTOLOAD slot to an object, you will need to get the name of the
-subroutine being called. C<autoloadCall()> returns the name of the subroutine,
-with the package name stripped off.
+If you add an C<AUTOLOAD> slot to an object, you will need to get the name of 
+the subroutine being called. C<autoloadCall()> returns the name of the 
+subroutine, with the package name stripped off.
 
 =head2 package() - Returns the name of the package for the object
 
@@ -2139,11 +2334,11 @@ with the package name stripped off.
 
 =head2 dump() - Returns a Data::Dumper string representing the object
 
-=head2 addSlot() - An alias for addSlots
+=head2 addSlot() - An alias for C<addSlots>
 
-=head2 addSlots() - Add or override slot definitions
+=head2 addSlots() - Add or replace slot definitions
 
-Allows you to add or override slot definitions in the receiver.
+Allows you to add or replace slot definitions in the receiver.
 
     $p->reflect->addSlots(
         fred        => 'this is fred',
@@ -2226,42 +2421,82 @@ The currently defined slot attributes are as follows:
 
 =over
 
-=item Field Slots
+=item C<FIELD> Slots
 
 =over
 
-=item C<constant>
+=item C<constant> (C<implementor>)
 
 When true, this defines the field slot as constant, disabling the ability to 
 modify it using the C<< $object->field($newValue) >> syntax.  The value may 
-still be modified using the hash syntax (i.e. C<< $object->{field} = $newValue 
->>).  This is mostly useful if you have an object method call that takes 
+still be modified using the hash syntax (i.e. C<< $object->{field} =
+$newValue >>).  This is mostly useful if you have an object method call that takes 
 parameters, but you wish to replace it on a given object with a hard-coded value 
 by using a field (which makes inspecting the value of the slot through 
-C<Data::Dumper> much easier since code objects are opaque).
+C<Data::Dumper> much easier than if you use a C<METHOD> slot to return the
+constant, since code objects are opaque).
+
+=item C<autoload> (C<filter>, rank 50)
+
+The passed value for the C<FIELD> slot should be a subroutine that returns the 
+desired value.  Upon the first access, the subroutine will be called, the return 
+value hard-coded into the object by adding the slot (including all otherwise 
+specified attributes), and the value then returned.  Useful for implementing 
+constant slots that are costly to initialize, especially those that return lists 
+of C<Class::Prototyped> objects!
+
+=item C<profile> (C<filter>, rank 80)
+
+Increments C<< $Class::Prototyped::Mirror::PROFILE::counts->{$package}->{$slotName} >> 
+everytime the slot is accessed.
+
+=item C<wantarray> (C<filter>, rank 90)
+
+If the field specifies a reference to an array and the call is in list context, 
+dereferences the array and returns a list of values.
+
+=item C<description> (C<advisory>)
+
+Can be used to specify a description.  No real support for this yet beyond that!
 
 =back
 
-=item Method Slots
+=item C<METHOD> Slots
 
 =over
 
-=item C<superable>
+=item C<superable> (C<filter>, rank 10)
 
 When true, this enables the C<< $self->reflect->super( . . . ) >> calls for this 
 method slot.
 
+=item C<profile> (C<filter>, rank 90)
+
+See C<FIELD> slots for explanation.
+
+=item C<overload> (C<advisory>)
+
+Set automatically for methods that implement operator overloading.
+
+=item C<description> (C<advisory>)
+
+See C<FIELD> slots for explanation.
+
 =back
 
-=item Parent Slots
+=item C<PARENT> Slots
 
 =over
 
-=item C<promote>
+=item C<promote> (C<advisory>)
 
 When true, this parent slot is promoted ahead of any other parent slots on the 
 object.  This attribute is ephemeral - it is not returned by calls to 
 C<getSlot>.
+
+=item C<description> (C<advisory>)
+
+See C<FIELD> slots for explanation.
 
 =back
 
@@ -2272,8 +2507,8 @@ C<getSlot>.
 =head2 deleteSlots() - Delete one or more of the receiver's slots by name
 
 This will let you delete existing slots in the receiver. If those slots were 
-defined earlier in the prototype chain, those earlier definitions will now be 
-available.
+defined in the receiver's inheritance hierarchy, those inherited definitions 
+will now be available.
 
     my $p1 = Class::Prototyped->new(
         field1 => 123,
@@ -2291,6 +2526,11 @@ available.
     $p2->sub1;    # still calls $p1.sub1
 
 =head2 super() - Call a method defined in a parent
+
+The call to a method defined on a parent that is obscured by the current one 
+looks like so:
+
+    $self->reflect->super('method_name', @params);
 
 =head2 slotNames() - Returns a list of all the slot names
 
@@ -2438,6 +2678,26 @@ will check its parent, and so on and so forth.  If none of the packages in
 the primary inheritance fork have been reflected upon, the value for
 C<Class::Prototyped> will be used, which should be C<default>.
 
+=head2 defaultAttributes() - get and set default attributes
+
+This isn't particularly pretty.  The general syntax looks something like:
+
+    my $temp = MyClass->reflect->defaultAttributes;
+    $temp->{METHOD}->{superable} = 1;
+    MyClass->reflect->defaultAttributes($temp);
+
+The return value from C<defaultAttributes> is a hash with the keys C<'FIELD'>, 
+C<'METHOD'>, and C<'PARENT'>.  The values are either C<undef> or hash references 
+consisting of the attributes and their default values.  Modify the data 
+structure as desired and pass it back to C<defaultAttributes> to change the 
+default attributes for that object or class.  Note that default attributes are 
+not inherited dynamically - the inheritance occurs when a new object is created, 
+but from that point on changes to a parent object are not inherited by the 
+child.  Global changes can be effected by modifying the C<defaultAttributes> for 
+C<Class::Prototyped> in a sufficiently early C<BEGIN> block.  Note that making 
+global changes like this is C<not> recommended for production modules as it may 
+interfere with other modules that rely upon C<Class::Prototyped>.
+
 =head2 wrap()
 
 =head2 unwrap()
@@ -2461,7 +2721,7 @@ will include whatever is in xx.pl. Likewise for modules:
 
   $foo->include( 'MyModule' );
 
-will search along your @INC path for MyModule.pm and include it.
+will search along your C<@INC> path for C<MyModule.pm> and include it.
 
 You can specify a second parameter that will be the name of a subroutine
 that you can use in your included code to refer to the object into
@@ -2469,7 +2729,7 @@ which the code is being included (as long as you don't change packages in the
 included code). The subroutine will be removed after the include, so
 don't call it from any subroutines defined in the included code.
 
-If you have the following in 'File.pl':
+If you have the following in C<File.pl>:
 
     sub b {'xxx.b'}
 
@@ -2485,8 +2745,8 @@ And you include it using:
 
     $mirror->include('File.pl', 'thisObject');
 
-Then the addSlots will work fine, but if sub c is called, it won't find
-thisObject().
+Then the C<addSlots> will work fine, but if sub C<c> is called, it won't find
+C<thisObject()>.
 
 =head1 AUTHOR
 

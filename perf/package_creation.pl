@@ -212,7 +212,7 @@ sub remote_exec {
 	print "\n$temp" . ' 'x(72-length($temp));
 
 	open(TEMP, "|$^X") or die "Unable to open $^X.\n";
-	Win32::Sleep(500);
+	sleep(1);
 	print TEMP "use Class::Prototyped qw(:NO_CHECK);\nuse Benchmark;\nBEGIN {$init\$main::start = Benchmark->new();}\n";
 	foreach my $i (1..$iter) {
 		(my $temp = $snippet) =~ s/\%i\%/$i/g;
