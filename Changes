@@ -1,0 +1,163 @@
+RCS file: /usr/local/cvsroot/perl/Class/Prototyped/Class/Prototyped.pm,v
+Working file: Class/Prototyped.pm
+head: 1.36
+branch:
+locks: strict
+access list:
+symbolic names:
+keyword substitution: kv
+total revisions: 36;	selected revisions: 36
+description:
+----------------------------
+revision 1.36
+date: 2001/07/15 01:05:37;  author: ned;  state: Exp;  lines: +5 -1
+added credit for chromatic
+----------------------------
+revision 1.35
+date: 2001/07/15 01:05:08;  author: ned;  state: Exp;  lines: +13 -7
+More changes for DESTROY/import problems under 5.005 by chromatic
+----------------------------
+revision 1.34
+date: 2001/07/15 00:54:27;  author: ned;  state: Exp;  lines: +43 -20
+5.005_03 changes by chromatic and ned
+----------------------------
+revision 1.33
+date: 2001/07/13 00:09:57;  author: ned;  state: Exp;  lines: +78 -33
+Toby's bug fixes, added findImplementation
+----------------------------
+revision 1.32
+date: 2001/07/12 01:10:47;  author: ned;  state: Exp;  lines: +69 -36
+Added Data::Dumper support.
+----------------------------
+revision 1.31
+date: 2001/07/12 00:59:10;  author: ned;  state: Exp;  lines: +20 -18
+More changes and bug fixes
+----------------------------
+revision 1.30
+date: 2001/07/11 22:27:37;  author: ned;  state: Exp;  lines: +216 -203
+With changes for reflection of anything,
+detecting odd numbers of args to addSlots,
+auto-numbering parent slots.
+----------------------------
+revision 1.29
+date: 2001/07/11 19:24:32;  author: ned;  state: Exp;  lines: +19 -17
+Moved lexicals into globals
+----------------------------
+revision 1.28
+date: 2001/07/11 19:15:28;  author: ned;  state: Exp;  lines: +5 -2
+changed version number
+----------------------------
+revision 1.27
+date: 2001/07/11 19:15:05;  author: ned;  state: Exp;  lines: +15 -11
+Made sure that we don't pollute symbol tables.
+----------------------------
+revision 1.26
+date: 2001/07/11 19:02:23;  author: ned;  state: Exp;  lines: +19 -10
+Fixed problems with include and vivification
+----------------------------
+revision 1.25
+date: 2001/07/11 18:04:16;  author: ned;  state: Exp;  lines: +5 -2
+added =back
+----------------------------
+revision 1.24
+date: 2001/07/11 17:49:20;  author: ned;  state: Exp;  lines: +6 -2
+Added Toby's blessed hash tie work
+----------------------------
+revision 1.23
+date: 2001/07/11 16:41:59;  author: ned;  state: Exp;  lines: +632 -208
+More edits from Toby for adding tied-hash capability.
+Whew! major rework, again...
+----------------------------
+revision 1.22
+date: 2001/07/11 05:05:00;  author: ned;  state: Exp;  lines: +22 -9
+More edits
+----------------------------
+revision 1.21
+date: 2001/07/10 17:05:49;  author: ned;  state: Exp;  lines: +8 -3
+Fixed a couple of class reflection bugs
+----------------------------
+revision 1.20
+date: 2001/07/10 03:34:48;  author: ned;  state: Exp;  lines: +37 -15
+Added debugging for global destruction
+----------------------------
+revision 1.19
+date: 2001/07/10 02:11:07;  author: ned;  state: Exp;  lines: +8 -6
+fixed typos made by Ned
+----------------------------
+revision 1.18
+date: 2001/07/10 02:05:28;  author: ned;  state: Exp;  lines: +465 -214
+Much more work by Toby.
+----------------------------
+revision 1.17
+date: 2001/07/09 04:47:32;  author: ned;  state: Exp;  lines: +160 -44
+Fix clones and super methods;
+autovivification of classes after includes.
+----------------------------
+revision 1.16
+date: 2001/07/08 23:54:14;  author: ned;  state: Exp;  lines: +26 -12
+Fixed POD
+----------------------------
+revision 1.15
+date: 2001/07/08 23:43:18;  author: ned;  state: Exp;  lines: +111 -38
+(toby) Added super method to ::Mirror and :EZACCESS
+(ned) Added explanation of super, include to POD
+Cleaned up croak messages
+Do not do include if we have a symbol table
+rename _include as include so it's public
+----------------------------
+revision 1.14
+date: 2001/07/08 19:49:27;  author: ned;  state: Exp;  lines: +26 -49
+Fixed POD docs
+----------------------------
+revision 1.13
+date: 2001/07/08 19:31:25;  author: ned;  state: Exp;  lines: +43 -35
+More debugging
+----------------------------
+revision 1.12
+date: 2001/07/08 18:23:37;  author: ned;  state: Exp;  lines: +11 -3
+added :REFLECT back in
+----------------------------
+revision 1.11
+date: 2001/07/08 18:16:14;  author: ned;  state: Exp;  lines: +6 -3
+Fixed reflect on classes
+----------------------------
+revision 1.10
+date: 2001/07/08 18:09:04;  author: ned;  state: Exp;  lines: +15 -8
+Added reflect to CORE::GLOBAL, changed :REFLECT to :EZACCESS
+----------------------------
+revision 1.9
+date: 2001/07/08 16:16:55;  author: ned;  state: Exp;  lines: +39 -45
+bug fixes, fixed overloading
+----------------------------
+revision 1.8
+date: 2001/07/08 07:41:34;  author: ned;  state: Exp;  lines: +208 -193
+Initial work by Ned on Toby's stuff.
+----------------------------
+revision 1.7
+date: 2001/07/08 02:59:26;  author: ned;  state: Exp;  lines: +259 -226
+Perltidy --tabs --indent-columns=4 -pt=1 -bt=1 -sbt=1 -nbl
+----------------------------
+revision 1.6
+date: 2001/07/08 02:25:58;  author: ned;  state: Exp;  lines: +394 -191
+Second rev from Toby, with POD
+----------------------------
+revision 1.5
+date: 2001/07/08 02:17:46;  author: ned;  state: Exp;  lines: +301 -297
+First rev from Toby
+----------------------------
+revision 1.4
+date: 2001/07/06 19:43:35;  author: ned;  state: Exp;  lines: +148 -101
+Added better test routines; got fields working right.
+Fixed DESTROY (was not destroying symbol tables).
+----------------------------
+revision 1.3
+date: 2001/07/06 04:46:19;  author: ned;  state: Exp;  lines: +58 -27
+added ability to overload ref to provide "parent". Not sure this is useful yet. Also added class field pointing back at package for efficiency.
+----------------------------
+revision 1.2
+date: 2001/07/06 00:49:36;  author: ned;  state: Exp;  lines: +140 -29
+Made Data::Dumping work; removed memory leak.
+----------------------------
+revision 1.1
+date: 2001/07/05 22:27:47;  author: ned;  state: Exp;
+Initial revision
