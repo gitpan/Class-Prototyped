@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Prototyped
 
+1.13  Wed Aug 28 2013
+ - Added version numbers to sub-packages to eliminate PAUSE indexer issues.
+
 1.12  Thu Aug 22 2013
  - Updated test suite to use getSlots(undef, 'rotated') to resolve issues with
    5.18 due to the introduction of hash order randomization.

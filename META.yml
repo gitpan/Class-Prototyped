@@ -15,28 +15,28 @@ name: Class-Prototyped
 provides:
   Class::Prototyped:
     file: lib/Class/Prototyped.pm
-    version: 1.12
+    version: 1.13
   Class::Prototyped::Mirror:
     file: lib/Class/Prototyped/Graph.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Mirror::Normal:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Mirror::PROFILE:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Mirror::SUPER:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Tied:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Tied::AutoVivify:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
   Class::Prototyped::Tied::Default:
     file: lib/Class/Prototyped.pm
-    version: 0
+    version: 1.13
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.12
+version: 1.13

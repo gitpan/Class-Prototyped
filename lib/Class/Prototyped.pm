@@ -24,7 +24,7 @@ package Class::Prototyped;
 use strict;
 use Carp();
 
-$Class::Prototyped::VERSION = '1.12';
+$Class::Prototyped::VERSION = '1.13';
 
 sub import {
 	while (my $symbol = shift) {
@@ -245,6 +245,7 @@ $Class::Prototyped::Mirror::ending = 0;
 sub END { $Class::Prototyped::Mirror::ending = 1 }
 
 package Class::Prototyped::Tied;
+$Class::Prototyped::Tied::VERSION = '1.13';
 @Class::Prototyped::Tied::DONT_LIE_FOR = qw(Data::Dumper);
 
 sub TIEHASH {
@@ -310,6 +311,7 @@ sub package {
 
 #### Default Tied implementation
 package Class::Prototyped::Tied::Default;
+$Class::Prototyped::Tied::Default::VERSION = '1.13';
 @Class::Prototyped::Tied::Default::ISA = qw(Class::Prototyped::Tied);
 
 sub STORE {
@@ -359,6 +361,7 @@ sub DELETE {
 
 #### AutoVivifying Tied implementation
 package Class::Prototyped::Tied::AutoVivify;
+$Class::Prototyped::Tied::AutoVivify::VERSION = '1.13';
 @Class::Prototyped::Tied::AutoVivify::ISA = qw(Class::Prototyped::Tied);
 
 sub STORE {
@@ -455,6 +458,9 @@ sub DELETE {
 # of an object is done through a reflector.
 
 package Class::Prototyped::Mirror;
+$Class::Prototyped::Mirror::VERSION = '1.13';
+$Class::Prototyped::Mirror::PROFILE::VERSION = '1.13';
+$Class::Prototyped::Mirror::SUPER::VERSION = '1.13';
 
 sub new {
 	my $class = shift;
@@ -512,7 +518,7 @@ sub new {
 #is blessed into a C::P class.
 
 package Class::Prototyped::Mirror::Normal;
-
+$Class::Prototyped::Mirror::Normal::VERSION = '1.13';
 @Class::Prototyped::Mirror::Normal::ISA = qw(Class::Prototyped::Mirror);
 
 sub new {
